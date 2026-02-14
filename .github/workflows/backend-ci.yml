@@ -1,0 +1,72 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['backend/**']
+  pull_request:
+    branches: [main]
+    paths: ['backend/**']
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: smartdocs_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint (Ruff)
+        run: |
+          cd backend
+          ruff check .
+          ruff format --check .
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/smartdocs_test
+          JWT_SECRET: test-secret-key-ci
+        run: |
+          cd backend
+          python -m pytest tests/ -v --tb=short
+
+  build-image:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          cd backend
+          docker build -t smartdocs-backend:test .
+
+      - name: Verify image runs
+        run: |
+          docker run --rm smartdocs-backend:test python -c "import fastapi; print('OK')"

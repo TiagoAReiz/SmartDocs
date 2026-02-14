@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: smartdocs
+      POSTGRES_PASSWORD: smartdocs
+      POSTGRES_DB: smartdocs
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartdocs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://smartdocs:smartdocs@db:5432/smartdocs
+      AZURE_DI_ENDPOINT: ${AZURE_DI_ENDPOINT:-}
+      AZURE_DI_KEY: ${AZURE_DI_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-dev-key-change-in-production}
+    volumes:
+      - uploads:/tmp/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  uploads:

@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Env
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+
+# Uploads
+/tmp/uploads/
+
+# Alembic
+alembic/versions/*.py
+!alembic/versions/.gitkeep
+
+# Docker
+.docker/
