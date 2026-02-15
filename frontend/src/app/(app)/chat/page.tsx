@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Loader2, Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,15 +23,28 @@ export default function ChatPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const scrollViewportRef = useRef<HTMLDivElement>(null);
+    const bottomRef = useRef<HTMLDivElement>(null);
+    const shouldAutoScrollRef = useRef(true);
+    const isAtBottomRef = useRef(true);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Auto-scroll to bottom
+    const scrollToBottom = () => {
+        bottomRef.current?.scrollIntoView({ block: "end" });
+    };
+
+    const handleScroll = () => {
+        const el = scrollViewportRef.current;
+        if (!el) return;
+        isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+    };
+
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        if (shouldAutoScrollRef.current || isAtBottomRef.current || isLoading) {
+            scrollToBottom();
+            shouldAutoScrollRef.current = false;
         }
-    }, [messages, isLoading]);
+    }, [messages.length, isLoading]);
 
     // Load chat history on mount
     useEffect(() => {
@@ -54,6 +66,7 @@ export default function ChatPage() {
                         timestamp: new Date(msg.created_at),
                     });
                 });
+                shouldAutoScrollRef.current = true;
                 setMessages(history);
             })
             .catch(() => {
@@ -65,6 +78,7 @@ export default function ChatPage() {
         const question = input.trim();
         if (!question || isLoading) return;
 
+        shouldAutoScrollRef.current = true;
         const userMsg: Message = {
             id: `user-${Date.now()}`,
             role: "user",
@@ -107,15 +121,19 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-3rem)] flex-col lg:h-[calc(100vh-4rem)]">
+        <div className="flex h-[calc(100vh-3rem)] min-h-0 flex-col lg:h-[calc(100vh-4rem)]">
             <PageHeader
                 title="Chat"
                 subtitle="Converse com seus documentos em linguagem natural"
             />
 
             {/* Messages area */}
-            <Card className="mt-6 flex flex-1 flex-col overflow-hidden border-white/[0.06] bg-[#0B1120]">
-                <ScrollArea className="flex-1 p-4 lg:p-6" ref={scrollRef}>
+            <Card className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden border-white/[0.06] bg-[#0B1120]">
+                <div
+                    ref={scrollViewportRef}
+                    onScroll={handleScroll}
+                    className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 lg:p-6"
+                >
                     {messages.length === 0 && !isLoading && (
                         <div className="flex h-full flex-col items-center justify-center py-20 text-center">
                             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#136dec]/10">
@@ -220,10 +238,11 @@ export default function ChatPage() {
                             </div>
                         )}
                     </div>
-                </ScrollArea>
+                    <div ref={bottomRef} />
+                </div>
 
                 {/* Input bar */}
-                <div className="border-t border-white/[0.06] p-4">
+                <div className="sticky bottom-0 border-t border-white/[0.06] bg-[#0B1120] p-4">
                     <div className="flex gap-3">
                         <Input
                             ref={inputRef}

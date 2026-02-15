@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import (
     create_access_token,
-    hash_password,
     verify_password,
 )
 from app.core.deps import get_current_user

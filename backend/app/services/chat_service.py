@@ -9,6 +9,10 @@ from app.config import settings
 from app.services.sql_guard import validate_sql, SQLGuardError
 
 
+class OpenAIUnavailableError(RuntimeError):
+    pass
+
+
 # Database schema description for the LLM prompt
 DB_SCHEMA = """
 Tabelas disponíveis:
@@ -27,10 +31,9 @@ Relacionamentos:
 """
 
 SYSTEM_PROMPT = f"""Você é um assistente de SQL que gera queries PostgreSQL baseadas em perguntas em linguagem natural.
-
 {DB_SCHEMA}
 
-Regras:
+Regras gerais:
 1. Gere APENAS SELECT queries válidas para PostgreSQL
 2. NUNCA use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE
 3. Use JOINs quando necessário para relacionar tabelas
@@ -38,6 +41,15 @@ Regras:
 5. Para datas, use funções PostgreSQL (NOW(), INTERVAL, etc.)
 6. Retorne APENAS o SQL, sem explicações, sem markdown, sem blocos de código
 7. Use aspas duplas para nomes de colunas com espaços ou caracteres especiais
+
+Regras obrigatórias do projeto:
+8. Sempre inclua a tabela documents no FROM sem alias (use exatamente "documents")
+9. Quando consultar outras tabelas, sempre relacione com documents (ex.: JOIN document_fields df ON df.document_id = documents.id)
+10. Para perguntas sobre contratos assinados, prefira buscar em document_fields usando chaves como "DATA DE ASSINATURA", "CONTRATO Nº", "RAZÃO SOCIAL", "CNPJ"
+11. Quando a data estiver em texto DD/MM/AAAA, filtre usando to_date(valor, 'DD/MM/YYYY') = DATE 'YYYY-MM-DD'
+12. Para consolidar dados de várias chaves do mesmo documento, use agregação com MAX(CASE WHEN ... THEN ... END) e GROUP BY documents.id
+13. Nunca use SELECT *; selecione apenas colunas necessárias e use aliases amigáveis
+14. Nunca aplique to_date em document_fields.field_value sem antes filtrar a chave do campo (ex.: df.field_key ILIKE 'DATA DE ASSINATURA:%')
 """
 
 ANSWER_PROMPT = """Dado os resultados da query SQL abaixo, responda a pergunta do usuário em português brasileiro de forma clara e amigável.
@@ -60,25 +72,53 @@ Regras:
 def _get_openai_client() -> AzureOpenAI:
     """Create an Azure OpenAI client."""
     return AzureOpenAI(
-        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT.strip(),
         api_key=settings.AZURE_OPENAI_KEY,
         api_version="2024-10-21",
     )
 
 
+def _openai_ready() -> bool:
+    return bool(
+        settings.AZURE_OPENAI_ENDPOINT
+        and settings.AZURE_OPENAI_KEY
+        and settings.AZURE_OPENAI_DEPLOYMENT
+    )
+
+
+def _openai_error_message(error: Exception | str) -> str:
+    base = (
+        "Falha ao acessar Azure OpenAI. "
+        f"Deployment: {settings.AZURE_OPENAI_DEPLOYMENT}. "
+        f"Erro: {error}"
+    )
+    if "DeploymentNotFound" in str(error):
+        return (
+            f"{base} "
+            "Dica: verifique no Azure OpenAI Studio se o deployment existe e se "
+            "AZURE_OPENAI_DEPLOYMENT está com o nome exato do deployment (não o nome do modelo)."
+        )
+    return base
+
+
 async def generate_sql(question: str) -> str:
     """Generate SQL from a natural language question using Azure OpenAI."""
+    if not _openai_ready():
+        raise OpenAIUnavailableError("Azure OpenAI não configurado")
     client = _get_openai_client()
 
-    response = client.chat.completions.create(
-        model=settings.AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": question},
-        ],
-        temperature=0.0,
-        max_tokens=500,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=settings.AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": question},
+            ],
+            temperature=0.0,
+            max_tokens=500,
+        )
+    except Exception as e:
+        raise OpenAIUnavailableError(_openai_error_message(e)) from e
 
     sql = response.choices[0].message.content.strip()
 
@@ -108,6 +148,8 @@ async def generate_answer(
     row_count: int,
 ) -> str:
     """Generate a natural language answer from query results using Azure OpenAI."""
+    if not _openai_ready():
+        raise OpenAIUnavailableError("Azure OpenAI não configurado")
     client = _get_openai_client()
 
     # Format results for the prompt
@@ -122,14 +164,17 @@ async def generate_answer(
         results=results_text,
     )
 
-    response = client.chat.completions.create(
-        model=settings.AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.3,
-        max_tokens=1000,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=settings.AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+        )
+    except Exception as e:
+        raise OpenAIUnavailableError(_openai_error_message(e)) from e
 
     answer = response.choices[0].message.content.strip()
     return answer
@@ -155,7 +200,23 @@ async def chat(
     logger.info(f"Chat: pergunta recebida de user_id={user_id}: {question[:100]}")
 
     # Step 1: Generate SQL
-    sql = await generate_sql(question)
+    try:
+        sql = await generate_sql(question)
+    except OpenAIUnavailableError as e:
+        logger.error(str(e))
+        if "DeploymentNotFound" in str(e):
+            answer = (
+                "Desculpe, o chat está indisponível porque o deployment do Azure OpenAI não foi encontrado. "
+                "Peça ao administrador para verificar AZURE_OPENAI_DEPLOYMENT."
+            )
+        else:
+            answer = "Desculpe, o chat está indisponível porque o Azure OpenAI não respondeu."
+        return {
+            "answer": answer,
+            "sql_used": None,
+            "row_count": 0,
+            "data": [],
+        }
 
     # Step 2: Validate SQL with guardrails
     max_retries = 2
@@ -166,26 +227,43 @@ async def chat(
         except SQLGuardError as e:
             if attempt < max_retries:
                 logger.warning(f"SQL inválido (tentativa {attempt + 1}): {e}")
-                # Ask the LLM to fix the SQL
+                if not _openai_ready():
+                    return {
+                        "answer": "Desculpe, não consegui corrigir o SQL porque o Azure OpenAI não está configurado.",
+                        "sql_used": sql,
+                        "row_count": 0,
+                        "data": [],
+                    }
                 client = _get_openai_client()
-                fix_response = client.chat.completions.create(
-                    model=settings.AZURE_OPENAI_DEPLOYMENT,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": question},
-                        {"role": "assistant", "content": sql},
-                        {
-                            "role": "user",
-                            "content": f"O SQL gerado é inválido: {e}. Corrija gerando apenas SELECT válido.",
-                        },
-                    ],
-                    temperature=0.0,
-                    max_tokens=500,
-                )
+                try:
+                    fix_response = client.chat.completions.create(
+                        model=settings.AZURE_OPENAI_DEPLOYMENT,
+                        messages=[
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": question},
+                            {"role": "assistant", "content": sql},
+                            {
+                                "role": "user",
+                                "content": f"O SQL gerado é inválido: {e}. Corrija gerando apenas SELECT válido.",
+                            },
+                        ],
+                        temperature=0.0,
+                        max_tokens=500,
+                    )
+                except Exception as openai_error:
+                    logger.error(_openai_error_message(openai_error))
+                    return {
+                        "answer": "Desculpe, o chat está indisponível porque o Azure OpenAI não respondeu.",
+                        "sql_used": None,
+                        "row_count": 0,
+                        "data": [],
+                    }
                 sql = fix_response.choices[0].message.content.strip()
                 if sql.startswith("```"):
                     lines = sql.split("\n")
-                    sql = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+                    sql = "\n".join(
+                        lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+                    )
                     sql = sql.strip()
             else:
                 logger.error(f"SQL inválido após {max_retries} tentativas: {e}")
@@ -201,6 +279,7 @@ async def chat(
         results = await execute_query(validated_sql, db)
         row_count = len(results)
     except Exception as e:
+        await db.rollback()
         logger.error(f"Erro ao executar SQL: {e}")
         return {
             "answer": f"Desculpe, ocorreu um erro ao consultar o banco de dados: {e}",
@@ -210,7 +289,23 @@ async def chat(
         }
 
     # Step 4: Generate answer
-    answer = await generate_answer(question, validated_sql, results, row_count)
+    try:
+        answer = await generate_answer(question, validated_sql, results, row_count)
+    except OpenAIUnavailableError as e:
+        logger.error(str(e))
+        if "DeploymentNotFound" in str(e):
+            answer = (
+                "Desculpe, não foi possível gerar a resposta porque o deployment do Azure OpenAI não foi encontrado. "
+                "Peça ao administrador para verificar AZURE_OPENAI_DEPLOYMENT."
+            )
+        else:
+            answer = "Desculpe, não foi possível gerar a resposta com o Azure OpenAI."
+        return {
+            "answer": answer,
+            "sql_used": validated_sql,
+            "row_count": row_count,
+            "data": results,
+        }
 
     return {
         "answer": answer,

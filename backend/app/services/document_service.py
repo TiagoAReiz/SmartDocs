@@ -1,11 +1,8 @@
-import os
-import uuid
 from pathlib import Path
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.document import Document, DocumentField, DocumentTable, DocumentStatus
 from app.models.document_log import DocumentLog
 from app.services.conversion_service import convert_to_pdf
@@ -16,8 +13,6 @@ from app.utils.file_utils import (
     get_mime_type,
     needs_conversion,
     is_supported,
-    ensure_upload_dir,
-    safe_filename,
 )
 
 
@@ -39,7 +34,7 @@ async def save_upload(
     # Upload to Blob Storage (Azurite/Azure)
     mime_type = get_mime_type(filename)
     blob_url = await storage_service.upload_file(file_content, filename, mime_type)
-    
+
     logger.info(f"Arquivo salvo no storage: {blob_url}")
 
     # Create database record
@@ -58,8 +53,8 @@ async def save_upload(
     # Log the upload event
     log = DocumentLog(
         document_id=doc.id,
-        event="upload",
-        details=f"Arquivo {filename} recebido com sucesso",
+        event_type="upload",
+        message=f"Arquivo {filename} recebido com sucesso",
     )
     db.add(log)
 
@@ -92,27 +87,27 @@ async def process_document(document_id: int, db: AsyncSession) -> None:
         # Step 1.5: Convert to PDF if needed
         if needs_conversion(doc.filename):
             import tempfile
-            
+
             suffix = Path(doc.filename).suffix
             # Use tempfile to save bytes for conversion tool
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp.write(file_bytes)
                 tmp_path = tmp.name
-            
+
             try:
                 logger.info(f"Convertendo {doc.filename} para PDF...")
                 converted_path = await convert_to_pdf(tmp_path)
-                
+
                 # Update file_bytes with converted content
                 file_bytes = Path(converted_path).read_bytes()
-                
+
                 # Cleanup converted file
                 Path(converted_path).unlink(missing_ok=True)
-                
+
                 log = DocumentLog(
                     document_id=doc.id,
-                    event="conversion_complete",
-                    details=f"Convertido para PDF (temp)",
+                    event_type="conversion_complete",
+                    message="Convertido para PDF (temp)",
                 )
                 db.add(log)
             finally:
@@ -156,10 +151,10 @@ async def process_document(document_id: int, db: AsyncSession) -> None:
 
         log = DocumentLog(
             document_id=doc.id,
-            event="extraction_complete",
-            details=f"{extraction['page_count']} páginas, "
-                    f"{len(extraction['fields'])} campos, "
-                    f"{len(extraction['tables'])} tabelas extraídos",
+            event_type="extraction_complete",
+            message=f"{extraction['page_count']} páginas, "
+            f"{len(extraction['fields'])} campos, "
+            f"{len(extraction['tables'])} tabelas extraídos",
         )
         db.add(log)
 
@@ -173,6 +168,7 @@ async def process_document(document_id: int, db: AsyncSession) -> None:
         # Update status to failed using a direct update to avoid "MissingGreenlet"
         # because 'doc' object is expired after rollback
         from sqlalchemy import update
+
         await db.execute(
             update(Document)
             .where(Document.id == document_id)
@@ -181,8 +177,8 @@ async def process_document(document_id: int, db: AsyncSession) -> None:
 
         log = DocumentLog(
             document_id=document_id,
-            event="processing_failed",
-            details=str(e),
+            event_type="processing_failed",
+            message=str(e),
         )
         db.add(log)
 

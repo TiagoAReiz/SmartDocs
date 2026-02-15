@@ -38,6 +38,7 @@ import { toast } from "sonner";
 export default function DocumentsPage() {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);
+    const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [page, setPage] = useState(1);
@@ -54,7 +55,7 @@ export default function DocumentsPage() {
         try {
             const params = new URLSearchParams();
             if (search) params.set("search", search);
-            if (statusFilter !== "all") params.set("status", statusFilter);
+            if (statusFilter !== "all") params.set("status_filter", statusFilter);
             params.set("page", String(page));
             params.set("per_page", String(perPage));
 
@@ -74,6 +75,13 @@ export default function DocumentsPage() {
     useEffect(() => {
         fetchDocuments();
     }, [fetchDocuments]);
+
+    useEffect(() => {
+        const t = window.setTimeout(() => {
+            setSearch(searchInput.trim());
+        }, 500);
+        return () => window.clearTimeout(t);
+    }, [searchInput]);
 
     const handleExpand = async (docId: number) => {
         if (expandedId === docId) {
@@ -173,9 +181,9 @@ export default function DocumentsPage() {
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <Input
                         placeholder="Buscar por nome..."
-                        value={search}
+                        value={searchInput}
                         onChange={(e) => {
-                            setSearch(e.target.value);
+                            setSearchInput(e.target.value);
                             setPage(1);
                         }}
                         className="h-10 border-white/[0.08] bg-white/[0.04] pl-10 text-slate-200 placeholder:text-slate-600"
@@ -405,6 +413,17 @@ export default function DocumentsPage() {
                                                             </table>
                                                         </div>
                                                     ))}
+
+                                                {detail.extracted_text?.trim() && (
+                                                    <details className="mt-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+                                                        <summary className="cursor-pointer px-3 py-2 text-sm text-slate-300">
+                                                            Texto extraído
+                                                        </summary>
+                                                        <pre className="max-h-[420px] overflow-auto px-3 pb-3 pt-2 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
+                                                            {detail.extracted_text}
+                                                        </pre>
+                                                    </details>
+                                                )}
 
                                                 {detail.error_message && (
                                                     <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">

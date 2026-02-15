@@ -6,6 +6,7 @@ from loguru import logger
 
 class SQLGuardError(Exception):
     """Raised when SQL validation fails."""
+
     pass
 
 
@@ -53,8 +54,17 @@ def validate_sql(sql: str, user_id: int | None = None, is_admin: bool = False) -
     # Block dangerous keywords even inside SELECT (e.g., subqueries with INSERT)
     sql_upper = sql.upper()
     dangerous_keywords = [
-        "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE",
-        "TRUNCATE", "EXEC", "EXECUTE", "GRANT", "REVOKE",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "ALTER",
+        "CREATE",
+        "TRUNCATE",
+        "EXEC",
+        "EXECUTE",
+        "GRANT",
+        "REVOKE",
         "INTO",  # blocks SELECT INTO
     ]
     for keyword in dangerous_keywords:

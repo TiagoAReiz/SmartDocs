@@ -9,11 +9,14 @@ class Settings(BaseSettings):
     )
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocs"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://smartdocs:smartdocs@localhost:5432/smartdocs"
+    )
 
     # Azure Document Intelligence
     AZURE_DI_ENDPOINT: str = ""
     AZURE_DI_KEY: str = ""
+    AZURE_DI_MODEL_ID: str = "prebuilt-document"
 
     # Azure OpenAI
     AZURE_OPENAI_ENDPOINT: str = ""
@@ -27,7 +30,7 @@ class Settings(BaseSettings):
 
     # File storage
     UPLOAD_DIR: str = "/tmp/uploads"
-    
+
     # Azure Storage
     AZURE_STORAGE_CONNECTION_STRING: str = ""
     AZURE_STORAGE_CONTAINER_NAME: str = "documents"

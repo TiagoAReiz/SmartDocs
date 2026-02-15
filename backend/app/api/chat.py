@@ -6,7 +6,12 @@ from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.models.chat_message import ChatMessage
-from app.schemas.chat import ChatRequest, ChatResponse, ChatHistoryItem, ChatHistoryResponse
+from app.schemas.chat import (
+    ChatRequest,
+    ChatResponse,
+    ChatHistoryItem,
+    ChatHistoryResponse,
+)
 from app.services import chat_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])

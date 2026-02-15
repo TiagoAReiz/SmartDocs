@@ -52,16 +52,28 @@ class Document(Base):
     # Relationships
     user = relationship("User", back_populates="documents")
     fields = relationship(
-        "DocumentField", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
+        "DocumentField",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     tables = relationship(
-        "DocumentTable", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
+        "DocumentTable",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     contracts = relationship(
-        "Contract", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
+        "Contract",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     logs = relationship(
-        "DocumentLog", back_populates="document", cascade="all, delete-orphan", lazy="selectin"
+        "DocumentLog",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

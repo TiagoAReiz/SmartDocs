@@ -1,15 +1,21 @@
 import math
-from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    UploadFile,
+    status,
+)
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_current_user
 from app.database import get_db, async_session
-from app.models.document import Document, DocumentField, DocumentTable, DocumentStatus
+from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.schemas.document import (
     DocumentDetail,
@@ -35,7 +41,11 @@ async def _background_process(document_id: int):
         await process_document(document_id, db)
 
 
-@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/upload",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def upload_documents(
     files: list[UploadFile],
     background_tasks: BackgroundTasks,
@@ -76,7 +86,11 @@ async def upload_documents(
     )
 
 
-@router.post("/{document_id}/reprocess", response_model=ReprocessResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{document_id}/reprocess",
+    response_model=ReprocessResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def reprocess_document(
     document_id: int,
     background_tasks: BackgroundTasks,

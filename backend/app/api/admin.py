@@ -20,9 +20,7 @@ async def list_users(
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     users = result.scalars().all()
 
-    return {
-        "users": [UserResponse.model_validate(u) for u in users]
-    }
+    return {"users": [UserResponse.model_validate(u) for u in users]}
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

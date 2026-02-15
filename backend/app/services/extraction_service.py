@@ -1,19 +1,33 @@
-from pathlib import Path
-
 from azure.ai.documentintelligence import DocumentIntelligenceClient
-from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, DocumentAnalysisFeature
+from azure.ai.documentintelligence.models import DocumentAnalysisFeature
 from azure.core.credentials import AzureKeyCredential
+from azure.core.exceptions import HttpResponseError
 from loguru import logger
 
 from app.config import settings
 
 
 def _get_client() -> DocumentIntelligenceClient:
-    """Create an Azure Document Intelligence client."""
     return DocumentIntelligenceClient(
-        endpoint=settings.AZURE_DI_ENDPOINT,
+        endpoint=settings.AZURE_DI_ENDPOINT.strip(),
         credential=AzureKeyCredential(settings.AZURE_DI_KEY),
     )
+
+
+def _analyze_document(
+    client: DocumentIntelligenceClient,
+    model_id: str,
+    file_bytes: bytes,
+):
+    poller = client.begin_analyze_document(
+        model_id,
+        file_bytes,
+        content_type="application/octet-stream",
+        features=[
+            DocumentAnalysisFeature.KEY_VALUE_PAIRS,
+        ],
+    )
+    return poller.result()
 
 
 async def extract_document(file_source: str | bytes) -> dict:
@@ -26,29 +40,11 @@ async def extract_document(file_source: str | bytes) -> dict:
     Returns:
         Dictionary with keys: extracted_text, fields, tables, page_count, raw_json
     """
-    client = None
-    if settings.AZURE_DI_ENDPOINT and settings.AZURE_DI_KEY:
-        try:
-            client = _get_client()
-        except Exception as e:
-            logger.warning(f"Falha ao criar cliente Azure DI: {e}. Usando mock.")
-    
-    if not client:
-        logger.warning("Credenciais do Azure Document Intelligence ausentes. Usando extração MOCK.")
-        # Mock response
-        return {
-            "extracted_text": "Texto extraído simulado (MOCK). Configure AZURE_DI_ENDPOINT e AZURE_DI_KEY para extração real.",
-            "fields": [
-                {"field_key": "VendorName", "field_value": "Mock Vendor", "confidence": 0.99, "page_number": 1},
-                {"field_key": "InvoiceDate", "field_value": "2023-10-27", "confidence": 0.98, "page_number": 1},
-                {"field_key": "Total", "field_value": "123.45", "confidence": 0.95, "page_number": 1}
-            ],
-            "tables": [],
-            "page_count": 1,
-            "raw_json": {"mock": True}
-        }
+    if not (settings.AZURE_DI_ENDPOINT and settings.AZURE_DI_KEY):
+        raise RuntimeError("Azure Document Intelligence não configurado")
 
-    
+    client = _get_client()
+
     if isinstance(file_source, str):
         logger.info(f"Extraindo dados do documento: {file_source}")
         with open(file_source, "rb") as f:
@@ -57,14 +53,28 @@ async def extract_document(file_source: str | bytes) -> dict:
         logger.info(f"Extraindo dados de bytes em memória ({len(file_source)} bytes)")
         file_bytes = file_source
 
-    # Use prebuilt-document model for general extraction
-    poller = client.begin_analyze_document(
-        "prebuilt-document",
-        file_bytes,
-        content_type="application/octet-stream",
+    logger.info(
+        f"Azure DI endpoint={settings.AZURE_DI_ENDPOINT} model={settings.AZURE_DI_MODEL_ID}"
     )
 
-    result = poller.result()
+    try:
+        result = _analyze_document(client, settings.AZURE_DI_MODEL_ID, file_bytes)
+    except HttpResponseError as e:
+        status_code = getattr(e, "status_code", None)
+        error_code = getattr(getattr(e, "error", None), "code", None)
+        should_fallback = (
+            status_code == 404
+            or error_code == "ModelNotFound"
+            or "ModelNotFound" in str(e)
+        )
+        if should_fallback:
+            fallback_model = "prebuilt-layout"
+            logger.warning(
+                f"Modelo {settings.AZURE_DI_MODEL_ID} não encontrado. Tentando {fallback_model}."
+            )
+            result = _analyze_document(client, fallback_model, file_bytes)
+        else:
+            raise
 
     # Extract text content
     extracted_text = result.content or ""
@@ -84,12 +94,43 @@ async def extract_document(file_source: str | bytes) -> dict:
                 page_number = kvp.key.bounding_regions[0].page_number
 
             if key:
-                fields.append({
+                fields.append(
+                    {
+                        "field_key": key,
+                        "field_value": value,
+                        "confidence": round(confidence, 4),
+                        "page_number": page_number,
+                    }
+                )
+    elif extracted_text:
+        for raw_line in extracted_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith("•"):
+                line = line.lstrip("•").strip()
+
+            parts = line.split(":", 1)
+            if len(parts) != 2:
+                continue
+
+            key = parts[0].strip()
+            value = parts[1].strip()
+            if not key or not value:
+                continue
+            if len(key) > 80:
+                continue
+
+            fields.append(
+                {
                     "field_key": key,
                     "field_value": value,
-                    "confidence": round(confidence, 4),
-                    "page_number": page_number,
-                })
+                    "confidence": 0.0,
+                    "page_number": None,
+                }
+            )
+            if len(fields) >= 200:
+                break
 
     # Extract tables
     tables = []
@@ -117,12 +158,14 @@ async def extract_document(file_source: str | bytes) -> dict:
             if table.bounding_regions:
                 page_number = table.bounding_regions[0].page_number
 
-            tables.append({
-                "table_index": idx,
-                "page_number": page_number,
-                "headers": headers,
-                "rows": rows_data,
-            })
+            tables.append(
+                {
+                    "table_index": idx,
+                    "page_number": page_number,
+                    "headers": headers,
+                    "rows": rows_data,
+                }
+            )
 
     # Build raw JSON for storage
     raw_json = {
