@@ -32,24 +32,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Hydrate auth state on mount
     useEffect(() => {
-        const savedToken = localStorage.getItem("smartdocs_token");
-        if (savedToken) {
-            setToken(savedToken);
-            api
-                .get<User>("/auth/me", {
-                    headers: { Authorization: `Bearer ${savedToken}` },
-                })
-                .then((res) => {
+        const checkAuth = async () => {
+            const savedToken = localStorage.getItem("smartdocs_token");
+            if (savedToken) {
+                try {
+                    const res = await api.get<User>("/auth/me", {
+                        headers: { Authorization: `Bearer ${savedToken}` },
+                    });
+                    setToken(savedToken);
                     setUser(res.data);
-                })
-                .catch(() => {
+                } catch (error) {
                     localStorage.removeItem("smartdocs_token");
                     localStorage.removeItem("smartdocs_user");
-                })
-                .finally(() => setLoading(false));
-        } else {
-            setLoading(false);
-        }
+                } finally {
+                    setLoading(false);
+                }
+            } else {
+                setLoading(false);
+            }
+        };
+
+        checkAuth();
     }, []);
 
     const login = async (credentials: LoginRequest) => {
