@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create uploads directory
-RUN mkdir -p /tmp/uploads
+# Create directories
+RUN mkdir -p /tmp/uploads && mkdir -p logs
 
 EXPOSE 8000
 

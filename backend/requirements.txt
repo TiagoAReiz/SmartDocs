@@ -26,6 +26,7 @@ Pillow>=11.0
 
 # Utilities
 httpx>=0.28
+aiohttp>=3.9
 python-multipart>=0.0.18
 loguru>=0.7
 orjson>=3.10

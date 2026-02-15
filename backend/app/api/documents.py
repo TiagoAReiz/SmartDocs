@@ -2,7 +2,7 @@ import math
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,7 +21,9 @@ from app.schemas.document import (
     DocumentUploadResponse,
     ReprocessResponse,
 )
+
 from app.services.document_service import process_document, save_upload
+from app.services.storage_service import storage_service
 from app.utils.file_utils import is_supported
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -234,16 +236,17 @@ async def get_document_file(
             detail="Documento não encontrado",
         )
 
-    # MVP: serve from local filesystem
-    file_path = Path(doc.blob_url) if doc.blob_url else None
-    if file_path is None or not file_path.exists():
+    # Retrieve from blob storage
+    try:
+        file_bytes = await storage_service.get_blob_content(doc.blob_url)
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Arquivo não encontrado no servidor",
+            detail=f"Arquivo não encontrado no storage: {e}",
         )
 
-    return FileResponse(
-        path=str(file_path),
-        filename=doc.filename,
+    return Response(
+        content=file_bytes,
         media_type=doc.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{doc.filename}"'},
     )

@@ -10,6 +10,7 @@ from app.models.document import Document, DocumentField, DocumentTable, Document
 from app.models.document_log import DocumentLog
 from app.services.conversion_service import convert_to_pdf
 from app.services.extraction_service import extract_document
+from app.services.storage_service import storage_service
 from app.utils.file_utils import (
     get_extension,
     get_mime_type,
@@ -27,7 +28,7 @@ async def save_upload(
     db: AsyncSession,
 ) -> Document:
     """
-    Save an uploaded file to disk and create a database record.
+    Save an uploaded file to storage and create a database record.
 
     Returns:
         The created Document instance with status=uploaded.
@@ -35,23 +36,20 @@ async def save_upload(
     if not is_supported(filename):
         raise ValueError(f"Extensão não suportada: {get_extension(filename)}")
 
-    upload_dir = ensure_upload_dir(settings.UPLOAD_DIR)
-    safe_name = safe_filename(filename)
-    unique_name = f"{uuid.uuid4().hex}_{safe_name}"
-    file_path = upload_dir / unique_name
-
-    # Save file to disk
-    file_path.write_bytes(file_content)
-    logger.info(f"Arquivo salvo: {file_path}")
+    # Upload to Blob Storage (Azurite/Azure)
+    mime_type = get_mime_type(filename)
+    blob_url = await storage_service.upload_file(file_content, filename, mime_type)
+    
+    logger.info(f"Arquivo salvo no storage: {blob_url}")
 
     # Create database record
     doc = Document(
         user_id=user_id,
         filename=filename,
         original_extension=get_extension(filename).lstrip("."),
-        mime_type=get_mime_type(filename),
+        mime_type=mime_type,
         status=DocumentStatus.UPLOADED,
-        blob_url=str(file_path),  # MVP: local path
+        blob_url=blob_url,
     )
     db.add(doc)
     await db.flush()
@@ -70,7 +68,7 @@ async def save_upload(
 
 async def process_document(document_id: int, db: AsyncSession) -> None:
     """
-    Background task: convert to PDF (if needed), extract data with Azure DI,
+    Background task: download from storage, convert to PDF (if needed), extract data with Azure DI,
     and save results to the database.
     """
     from sqlalchemy import select
@@ -87,23 +85,43 @@ async def process_document(document_id: int, db: AsyncSession) -> None:
         doc.status = DocumentStatus.PROCESSING
         await db.flush()
 
-        file_path = doc.blob_url  # MVP: this is the local file path
+        # Step 1: Download from blob
+        logger.info(f"Baixando documento do storage: {doc.blob_url}")
+        file_bytes = await storage_service.get_blob_content(doc.blob_url)
 
-        # Step 1: Convert to PDF if needed
+        # Step 1.5: Convert to PDF if needed
         if needs_conversion(doc.filename):
-            logger.info(f"Convertendo {doc.filename} para PDF...")
-            file_path = await convert_to_pdf(file_path)
-
-            log = DocumentLog(
-                document_id=doc.id,
-                event="conversion_complete",
-                details=f"Convertido para PDF: {file_path}",
-            )
-            db.add(log)
+            import tempfile
+            
+            suffix = Path(doc.filename).suffix
+            # Use tempfile to save bytes for conversion tool
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+            
+            try:
+                logger.info(f"Convertendo {doc.filename} para PDF...")
+                converted_path = await convert_to_pdf(tmp_path)
+                
+                # Update file_bytes with converted content
+                file_bytes = Path(converted_path).read_bytes()
+                
+                # Cleanup converted file
+                Path(converted_path).unlink(missing_ok=True)
+                
+                log = DocumentLog(
+                    document_id=doc.id,
+                    event="conversion_complete",
+                    details=f"Convertido para PDF (temp)",
+                )
+                db.add(log)
+            finally:
+                # Cleanup original temp
+                Path(tmp_path).unlink(missing_ok=True)
 
         # Step 2: Extract data with Azure Document Intelligence
         logger.info(f"Iniciando extração para documento {doc.id}...")
-        extraction = await extract_document(file_path)
+        extraction = await extract_document(file_bytes)
 
         # Step 3: Save extracted data
         doc.extracted_text = extraction["extracted_text"]
@@ -150,14 +168,19 @@ async def process_document(document_id: int, db: AsyncSession) -> None:
 
     except Exception as e:
         await db.rollback()
-        logger.error(f"Erro ao processar documento {doc.id}: {e}")
+        logger.error(f"Erro ao processar documento {document_id}: {e}")
 
-        # Update status to failed
-        doc.status = DocumentStatus.FAILED
-        doc.error_message = str(e)
+        # Update status to failed using a direct update to avoid "MissingGreenlet"
+        # because 'doc' object is expired after rollback
+        from sqlalchemy import update
+        await db.execute(
+            update(Document)
+            .where(Document.id == document_id)
+            .values(status=DocumentStatus.FAILED, error_message=str(e))
+        )
 
         log = DocumentLog(
-            document_id=doc.id,
+            document_id=document_id,
             event="processing_failed",
             details=str(e),
         )

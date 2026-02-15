@@ -78,6 +78,7 @@ class DocumentField(Base):
     field_key: Mapped[str] = mapped_column(String(255), nullable=False)
     field_value: Mapped[str | None] = mapped_column(Text)
     confidence: Mapped[float | None] = mapped_column(Float)
+    bounding_box: Mapped[dict | None] = mapped_column(JSON)
     page_number: Mapped[int | None] = mapped_column(Integer)
 
     # Relationships

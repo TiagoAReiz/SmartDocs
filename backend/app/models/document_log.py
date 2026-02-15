@@ -13,8 +13,8 @@ class DocumentLog(Base):
     document_id: Mapped[int] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    event: Mapped[str] = mapped_column(String(100), nullable=False)
-    details: Mapped[str | None] = mapped_column(Text)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -23,4 +23,4 @@ class DocumentLog(Base):
     document = relationship("Document", back_populates="logs")
 
     def __repr__(self) -> str:
-        return f"<DocumentLog id={self.id} event={self.event}>"
+        return f"<DocumentLog id={self.id} event={self.event_type}>"

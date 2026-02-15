@@ -16,27 +16,51 @@ def _get_client() -> DocumentIntelligenceClient:
     )
 
 
-async def extract_document(file_path: str) -> dict:
+async def extract_document(file_source: str | bytes) -> dict:
     """
     Extract text, fields, and tables from a document using Azure Document Intelligence.
 
     Args:
-        file_path: Path to the PDF or image file to analyze.
+        file_source: Path to the PDF/image file OR raw bytes.
 
     Returns:
         Dictionary with keys: extracted_text, fields, tables, page_count, raw_json
     """
-    logger.info(f"Extraindo dados do documento: {file_path}")
+    client = None
+    if settings.AZURE_DI_ENDPOINT and settings.AZURE_DI_KEY:
+        try:
+            client = _get_client()
+        except Exception as e:
+            logger.warning(f"Falha ao criar cliente Azure DI: {e}. Usando mock.")
+    
+    if not client:
+        logger.warning("Credenciais do Azure Document Intelligence ausentes. Usando extração MOCK.")
+        # Mock response
+        return {
+            "extracted_text": "Texto extraído simulado (MOCK). Configure AZURE_DI_ENDPOINT e AZURE_DI_KEY para extração real.",
+            "fields": [
+                {"field_key": "VendorName", "field_value": "Mock Vendor", "confidence": 0.99, "page_number": 1},
+                {"field_key": "InvoiceDate", "field_value": "2023-10-27", "confidence": 0.98, "page_number": 1},
+                {"field_key": "Total", "field_value": "123.45", "confidence": 0.95, "page_number": 1}
+            ],
+            "tables": [],
+            "page_count": 1,
+            "raw_json": {"mock": True}
+        }
 
-    client = _get_client()
-
-    with open(file_path, "rb") as f:
-        file_bytes = f.read()
+    
+    if isinstance(file_source, str):
+        logger.info(f"Extraindo dados do documento: {file_source}")
+        with open(file_source, "rb") as f:
+            file_bytes = f.read()
+    else:
+        logger.info(f"Extraindo dados de bytes em memória ({len(file_source)} bytes)")
+        file_bytes = file_source
 
     # Use prebuilt-document model for general extraction
     poller = client.begin_analyze_document(
         "prebuilt-document",
-        analyze_request=file_bytes,
+        file_bytes,
         content_type="application/octet-stream",
     )
 

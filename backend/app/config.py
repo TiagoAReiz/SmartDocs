@@ -27,6 +27,10 @@ class Settings(BaseSettings):
 
     # File storage
     UPLOAD_DIR: str = "/tmp/uploads"
+    
+    # Azure Storage
+    AZURE_STORAGE_CONNECTION_STRING: str = ""
+    AZURE_STORAGE_CONTAINER_NAME: str = "documents"
 
 
 settings = Settings()

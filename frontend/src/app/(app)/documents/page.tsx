@@ -45,6 +45,7 @@ export default function DocumentsPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<DocumentDetail | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const perPage = 20;
 
@@ -76,19 +77,61 @@ export default function DocumentsPage() {
 
     const handleExpand = async (docId: number) => {
         if (expandedId === docId) {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            setPreviewUrl(null);
             setExpandedId(null);
             setDetail(null);
             return;
         }
+
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+
         setExpandedId(docId);
         setDetailLoading(true);
         try {
             const res = await api.get<DocumentDetail>(`/documents/${docId}`);
             setDetail(res.data);
+
+            // Fetch preview blob if supported
+            if (res.data.mime_type === "application/pdf" || res.data.mime_type?.startsWith("image/")) {
+                const fileRes = await api.get(`/documents/${docId}/file`, { responseType: "blob" });
+                const url = URL.createObjectURL(fileRes.data);
+                setPreviewUrl(url);
+            }
         } catch {
             toast.error("Erro ao carregar detalhes do documento");
         } finally {
             setDetailLoading(false);
+        }
+    };
+
+    const handleDownload = async (doc: DocumentDetail) => {
+        try {
+            // Use existing preview URL if available
+            if (previewUrl && (doc.mime_type === "application/pdf" || doc.mime_type?.startsWith("image/"))) {
+                window.open(previewUrl, "_blank");
+                return;
+            }
+
+            // Otherwise fetch blob with auth
+            toast.loading("Baixando documento...");
+            const response = await api.get(`/documents/${doc.id}/file`, {
+                responseType: "blob",
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: doc.mime_type }));
+            const link = document.createElement("a");
+            link.href = url;
+            link.setAttribute("download", doc.filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.dismiss();
+            toast.success("Download iniciado");
+        } catch {
+            toast.dismiss();
+            toast.error("Erro ao baixar documento");
         }
     };
 
@@ -241,11 +284,30 @@ export default function DocumentsPage() {
                                                 </h4>
                                                 <div className="aspect-[4/3] overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02]">
                                                     {detail.mime_type === "application/pdf" ? (
-                                                        <iframe
-                                                            src={`${process.env.NEXT_PUBLIC_API_URL}/documents/${detail.id}/file`}
-                                                            className="h-full w-full"
-                                                            title={detail.filename}
-                                                        />
+                                                        previewUrl ? (
+                                                            <iframe
+                                                                src={previewUrl}
+                                                                className="h-full w-full"
+                                                                title={detail.filename}
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-full items-center justify-center">
+                                                                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+                                                            </div>
+                                                        )
+                                                    ) : detail.mime_type?.startsWith("image/") ? (
+                                                        previewUrl ? (
+                                                            /* eslint-disable-next-line @next/next/no-img-element */
+                                                            <img
+                                                                src={previewUrl}
+                                                                alt={detail.filename}
+                                                                className="h-full w-full object-contain"
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-full items-center justify-center">
+                                                                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+                                                            </div>
+                                                        )
                                                     ) : (
                                                         <div className="flex h-full items-center justify-center text-sm text-slate-500">
                                                             Preview não disponível para este tipo de arquivo
@@ -256,12 +318,7 @@ export default function DocumentsPage() {
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() =>
-                                                            window.open(
-                                                                `${process.env.NEXT_PUBLIC_API_URL}/documents/${detail.id}/file`,
-                                                                "_blank"
-                                                            )
-                                                        }
+                                                        onClick={() => handleDownload(detail)}
                                                         className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
                                                     >
                                                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
@@ -374,35 +431,37 @@ export default function DocumentsPage() {
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
-                    <span className="text-sm text-slate-500">
-                        Página {page} de {totalPages}
-                    </span>
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page <= 1}
-                            onClick={() => setPage(page - 1)}
-                            className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
-                        >
-                            <ChevronLeft className="mr-1 h-4 w-4" />
-                            Anterior
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(page + 1)}
-                            className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
-                        >
-                            Próxima
-                            <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
+            {
+                totalPages > 1 && (
+                    <div className="mt-4 flex items-center justify-between">
+                        <span className="text-sm text-slate-500">
+                            Página {page} de {totalPages}
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={page <= 1}
+                                onClick={() => setPage(page - 1)}
+                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
+                            >
+                                <ChevronLeft className="mr-1 h-4 w-4" />
+                                Anterior
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage(page + 1)}
+                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
+                            >
+                                Próxima
+                                <ChevronRight className="ml-1 h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }
