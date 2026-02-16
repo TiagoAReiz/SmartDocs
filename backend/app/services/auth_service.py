@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password, verify_password, create_access_token
@@ -7,7 +7,8 @@ from app.models.user import User
 
 async def authenticate_user(email: str, password: str, db: AsyncSession) -> User | None:
     """Authenticate a user by email and password."""
-    result = await db.execute(select(User).where(User.email == email))
+    email_value = email.lower()
+    result = await db.execute(select(User).where(func.lower(User.email) == email_value))
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(password, user.password_hash):

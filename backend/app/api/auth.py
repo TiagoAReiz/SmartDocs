@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import (
@@ -17,7 +17,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return JWT token."""
-    result = await db.execute(select(User).where(User.email == body.email))
+    email_value = body.email.lower()
+    result = await db.execute(
+        select(User).where(func.lower(User.email) == email_value)
+    )
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(body.password, user.password_hash):
