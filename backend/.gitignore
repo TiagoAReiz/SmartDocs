@@ -23,8 +23,8 @@ logs/
 /tmp/uploads/
 
 # Alembic
-alembic/versions/*.py
-!alembic/versions/.gitkeep
+alembic/versions/__pycache__/
+alembic/versions/*.pyc
 
 # Docker
 .docker/

@@ -42,6 +42,26 @@ jobs:
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
+      - name: Rodar migrations (alembic upgrade head)
+        run: |
+          set -euo pipefail
+          URL=$(az containerapp show \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          for i in 1 2 3 4 5; do
+            curl -fsS "https://$URL/health" && break || sleep 3
+          done
+          REVISION=$(az containerapp show \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.latestRevisionName" -o tsv)
+          az containerapp exec \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --revision "$REVISION" \
+            --command "sh -lc 'cd /app && alembic upgrade head'"
+
       - name: Verificar deploy
         run: |
           URL=$(az containerapp show \
