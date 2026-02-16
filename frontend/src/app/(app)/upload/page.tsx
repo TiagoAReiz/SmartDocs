@@ -190,9 +190,9 @@ export default function UploadPage() {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`mt-6 flex cursor-pointer flex-col items-center justify-center border-2 border-dashed p-12 transition-all duration-200 ${isDragging
-                        ? "border-[#136dec] bg-[#136dec]/5"
-                        : "border-white/[0.1] bg-[#1E293B]/50 hover:border-white/20 hover:bg-[#1E293B]/70"
+                className={`mt-6 flex cursor-pointer flex-col items-center justify-center border-2 border-dashed p-6 md:p-12 transition-all duration-200 ${isDragging
+                    ? "border-[#136dec] bg-[#136dec]/5"
+                    : "border-white/[0.1] bg-[#1E293B]/50 hover:border-white/20 hover:bg-[#1E293B]/70"
                     }`}
             >
                 <input

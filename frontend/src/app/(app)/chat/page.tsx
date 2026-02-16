@@ -113,6 +113,7 @@ export default function ChatPage() {
         }
     };
 
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -121,7 +122,7 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-3rem)] min-h-0 flex-col lg:h-[calc(100vh-4rem)]">
+        <div className="flex h-[calc(100dvh-3rem)] min-h-0 flex-col lg:h-[calc(100vh-4rem)]">
             <PageHeader
                 title="Chat"
                 subtitle="Converse com seus documentos em linguagem natural"
@@ -132,7 +133,7 @@ export default function ChatPage() {
                 <div
                     ref={scrollViewportRef}
                     onScroll={handleScroll}
-                    className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 lg:p-6"
+                    className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2 lg:p-6"
                 >
                     {messages.length === 0 && !isLoading && (
                         <div className="flex h-full flex-col items-center justify-center py-20 text-center">
@@ -160,8 +161,8 @@ export default function ChatPage() {
                                 >
                                     <div
                                         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${msg.role === "user"
-                                                ? "bg-[#136dec]"
-                                                : "bg-slate-700"
+                                            ? "bg-[#136dec]"
+                                            : "bg-slate-700"
                                             }`}
                                     >
                                         {msg.role === "user" ? (
@@ -172,8 +173,8 @@ export default function ChatPage() {
                                     </div>
                                     <div
                                         className={`rounded-2xl px-4 py-3 ${msg.role === "user"
-                                                ? "bg-[#136dec] text-white"
-                                                : "bg-[#1E293B] text-slate-200"
+                                            ? "bg-[#136dec] text-white"
+                                            : "bg-[#1E293B] text-slate-200"
                                             }`}
                                     >
                                         <div className="prose prose-invert prose-sm max-w-none [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-white/10 [&_th]:bg-white/5 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-medium [&_th]:text-slate-300 [&_td]:border [&_td]:border-white/10 [&_td]:px-3 [&_td]:py-2 [&_td]:text-sm [&_td]:text-slate-400">

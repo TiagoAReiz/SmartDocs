@@ -173,79 +173,83 @@ export default function AdminUsersPage() {
                 {/* Users table */}
                 <Card className="mt-6 overflow-hidden border-white/[0.06] bg-transparent">
                     <div className="overflow-x-auto">
-                        {/* Header */}
-                        <div className="grid grid-cols-[1fr_1fr_120px_120px_100px] gap-4 border-b border-white/[0.06] bg-[#1E293B]/80 px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500">
-                            <span>Nome</span>
-                            <span>Email</span>
-                            <span>Perfil</span>
-                            <span>Data Cadastro</span>
-                            <span>Ações</span>
-                        </div>
+                        <div className="min-w-[800px]">
+                            {/* Header */}
+                            <div className="grid grid-cols-[1fr_200px_100px_140px_100px] gap-4 border-b border-white/[0.06] bg-[#1E293B]/80 px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500">
+                                <span>Nome</span>
+                                <span>Email</span>
+                                <span>Perfil</span>
+                                <span>Data Cadastro</span>
+                                <span>Ações</span>
+                            </div>
 
-                        {/* Loading */}
-                        {loading &&
-                            Array.from({ length: 4 }).map((_, i) => (
-                                <div
-                                    key={i}
-                                    className="grid grid-cols-[1fr_1fr_120px_120px_100px] gap-4 border-b border-white/[0.04] px-4 py-4"
-                                >
-                                    <div className="h-4 w-32 animate-pulse rounded bg-white/[0.06]" />
-                                    <div className="h-4 w-40 animate-pulse rounded bg-white/[0.06]" />
-                                    <div className="h-5 w-16 animate-pulse rounded bg-white/[0.06]" />
-                                    <div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" />
-                                    <div className="h-4 w-16 animate-pulse rounded bg-white/[0.06]" />
-                                </div>
-                            ))}
+                            {/* Loading */}
+                            {loading &&
+                                Array.from({ length: 4 }).map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className="grid grid-cols-[1fr_200px_100px_140px_100px] gap-4 border-b border-white/[0.04] px-4 py-4"
+                                    >
+                                        <div className="h-4 w-32 animate-pulse rounded bg-white/[0.06]" />
+                                        <div className="h-4 w-40 animate-pulse rounded bg-white/[0.06]" />
+                                        <div className="h-5 w-16 animate-pulse rounded bg-white/[0.06]" />
+                                        <div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" />
+                                        <div className="h-4 w-16 animate-pulse rounded bg-white/[0.06]" />
+                                    </div>
+                                ))}
 
-                        {/* Rows */}
-                        {!loading &&
-                            users.map((user) => (
-                                <div
-                                    key={user.id}
-                                    className="grid grid-cols-[1fr_1fr_120px_120px_100px] items-center gap-4 border-b border-white/[0.04] px-4 py-4 transition-colors hover:bg-white/[0.02]"
-                                >
-                                    <span className="text-sm font-medium text-slate-200">
-                                        {user.name}
-                                    </span>
-                                    <span className="text-sm text-slate-400">{user.email}</span>
-                                    <Badge
-                                        variant="outline"
-                                        className={`text-xs ${user.role === "admin"
+                            {/* Rows */}
+                            {!loading &&
+                                users.map((user) => (
+                                    <div
+                                        key={user.id}
+                                        className="grid grid-cols-[1fr_200px_100px_140px_100px] items-center gap-4 border-b border-white/[0.04] px-4 py-4 transition-colors hover:bg-white/[0.02]"
+                                    >
+                                        <span className="text-sm font-medium text-slate-200">
+                                            {user.name}
+                                        </span>
+                                        <div className="truncate text-sm text-slate-400" title={user.email}>
+                                            {user.email}
+                                        </div>
+                                        <Badge
+                                            variant="outline"
+                                            className={`text-xs w-fit ${user.role === "admin"
                                                 ? "bg-[#136dec]/15 text-[#136dec] border-[#136dec]/20"
                                                 : "bg-slate-500/15 text-slate-400 border-slate-500/20"
-                                            }`}
-                                    >
-                                        {user.role === "admin" ? "Admin" : "Usuário"}
-                                    </Badge>
-                                    <span className="text-sm text-slate-400">
-                                        {user.created_at ? formatDate(user.created_at) : "—"}
-                                    </span>
-                                    <div className="flex gap-1">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => openEdit(user)}
-                                            className="h-8 w-8 text-slate-400 hover:text-[#136dec]"
+                                                }`}
                                         >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => openDelete(user)}
-                                            className="h-8 w-8 text-slate-400 hover:text-red-400"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
+                                            {user.role === "admin" ? "Admin" : "Usuário"}
+                                        </Badge>
+                                        <span className="text-sm text-slate-400">
+                                            {user.created_at ? formatDate(user.created_at) : "—"}
+                                        </span>
+                                        <div className="flex gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => openEdit(user)}
+                                                className="h-8 w-8 text-slate-400 hover:text-[#136dec]"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => openDelete(user)}
+                                                className="h-8 w-8 text-slate-400 hover:text-red-400"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
 
-                        {!loading && users.length === 0 && (
-                            <div className="py-12 text-center text-sm text-slate-500">
-                                Nenhum usuário cadastrado
-                            </div>
-                        )}
+                            {!loading && users.length === 0 && (
+                                <div className="py-12 text-center text-sm text-slate-500">
+                                    Nenhum usuário cadastrado
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </Card>
 

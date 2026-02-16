@@ -211,242 +211,246 @@ export default function DocumentsPage() {
 
             {/* Documents table */}
             <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.06]">
-                {/* Header */}
-                <div className="grid grid-cols-[1fr_120px_120px_80px_100px_40px] gap-4 border-b border-white/[0.06] bg-[#1E293B]/80 px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500">
-                    <span>Nome</span>
-                    <span>Tipo</span>
-                    <span>Data Upload</span>
-                    <span>Páginas</span>
-                    <span>Status</span>
-                    <span />
-                </div>
+                <div className="overflow-x-auto">
+                    <div className="min-w-[800px]">
+                        {/* Header */}
+                        <div className="grid grid-cols-[1fr_120px_120px_80px_100px_40px] gap-4 border-b border-white/[0.06] bg-[#1E293B]/80 px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500">
+                            <span>Nome</span>
+                            <span>Tipo</span>
+                            <span>Data Upload</span>
+                            <span>Páginas</span>
+                            <span>Status</span>
+                            <span />
+                        </div>
 
-                {/* Loading state */}
-                {loading && (
-                    <div className="space-y-0">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <div
-                                key={i}
-                                className="grid grid-cols-[1fr_120px_120px_80px_100px_40px] gap-4 border-b border-white/[0.04] px-4 py-4"
-                            >
-                                <Skeleton className="h-4 w-48" />
-                                <Skeleton className="h-5 w-20" />
-                                <Skeleton className="h-4 w-24" />
-                                <Skeleton className="h-4 w-8" />
-                                <Skeleton className="h-5 w-20" />
-                                <Skeleton className="h-4 w-4" />
+                        {/* Loading state */}
+                        {loading && (
+                            <div className="space-y-0">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className="grid grid-cols-[1fr_120px_120px_80px_100px_40px] gap-4 border-b border-white/[0.04] px-4 py-4"
+                                    >
+                                        <Skeleton className="h-4 w-48" />
+                                        <Skeleton className="h-5 w-20" />
+                                        <Skeleton className="h-4 w-24" />
+                                        <Skeleton className="h-4 w-8" />
+                                        <Skeleton className="h-5 w-20" />
+                                        <Skeleton className="h-4 w-4" />
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                )}
+                        )}
 
-                {/* Rows */}
-                {!loading &&
-                    documents.map((doc) => (
-                        <div key={doc.id}>
-                            <div
-                                onClick={() => handleExpand(doc.id)}
-                                className="grid cursor-pointer grid-cols-[1fr_120px_120px_80px_100px_40px] items-center gap-4 border-b border-white/[0.04] px-4 py-4 transition-colors hover:bg-white/[0.02]"
-                            >
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <FileText className="h-4 w-4 shrink-0 text-slate-500" />
-                                    <span className="truncate text-sm font-medium text-slate-200">
-                                        {doc.filename}
-                                    </span>
-                                </div>
-                                <Badge
-                                    variant="outline"
-                                    className={`text-xs ${typeColors[doc.type] || typeColors.default}`}
-                                >
-                                    {doc.type}
-                                </Badge>
-                                <span className="text-sm text-slate-400">
-                                    {formatDate(doc.upload_date)}
-                                </span>
-                                <span className="text-sm text-slate-400">
-                                    {doc.page_count}
-                                </span>
-                                <StatusBadge status={doc.status} />
-                                <div className="text-slate-500">
-                                    {expandedId === doc.id ? (
-                                        <ChevronUp className="h-4 w-4" />
-                                    ) : (
-                                        <ChevronDown className="h-4 w-4" />
+                        {/* Rows */}
+                        {!loading &&
+                            documents.map((doc) => (
+                                <div key={doc.id}>
+                                    <div
+                                        onClick={() => handleExpand(doc.id)}
+                                        className="grid cursor-pointer grid-cols-[1fr_120px_120px_80px_100px_40px] items-center gap-4 border-b border-white/[0.04] px-4 py-4 transition-colors hover:bg-white/[0.02]"
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <FileText className="h-4 w-4 shrink-0 text-slate-500" />
+                                            <span className="truncate text-sm font-medium text-slate-200">
+                                                {doc.filename}
+                                            </span>
+                                        </div>
+                                        <Badge
+                                            variant="outline"
+                                            className={`text-xs ${typeColors[doc.type] || typeColors.default}`}
+                                        >
+                                            {doc.type}
+                                        </Badge>
+                                        <span className="text-sm text-slate-400">
+                                            {formatDate(doc.upload_date)}
+                                        </span>
+                                        <span className="text-sm text-slate-400">
+                                            {doc.page_count}
+                                        </span>
+                                        <StatusBadge status={doc.status} />
+                                        <div className="text-slate-500">
+                                            {expandedId === doc.id ? (
+                                                <ChevronUp className="h-4 w-4" />
+                                            ) : (
+                                                <ChevronDown className="h-4 w-4" />
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded detail */}
+                                    {expandedId === doc.id && (
+                                        <div className="border-b border-white/[0.06] bg-[#0B1120]/50 p-6">
+                                            {detailLoading ? (
+                                                <div className="flex items-center justify-center py-8">
+                                                    <Loader2 className="h-6 w-6 animate-spin text-[#136dec]" />
+                                                </div>
+                                            ) : detail ? (
+                                                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                                                    {/* Document preview */}
+                                                    <div>
+                                                        <h4 className="mb-3 text-sm font-medium text-slate-300">
+                                                            Preview do Documento
+                                                        </h4>
+                                                        <div className="aspect-[4/3] overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02]">
+                                                            {detail.mime_type === "application/pdf" ? (
+                                                                previewUrl ? (
+                                                                    <iframe
+                                                                        src={previewUrl}
+                                                                        className="h-full w-full"
+                                                                        title={detail.filename}
+                                                                    />
+                                                                ) : (
+                                                                    <div className="flex h-full items-center justify-center">
+                                                                        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+                                                                    </div>
+                                                                )
+                                                            ) : detail.mime_type?.startsWith("image/") ? (
+                                                                previewUrl ? (
+                                                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                                                    <img
+                                                                        src={previewUrl}
+                                                                        alt={detail.filename}
+                                                                        className="h-full w-full object-contain"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="flex h-full items-center justify-center">
+                                                                        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+                                                                    </div>
+                                                                )
+                                                            ) : (
+                                                                <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                                                                    Preview não disponível para este tipo de arquivo
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="mt-3 flex gap-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleDownload(detail)}
+                                                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
+                                                            >
+                                                                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                                                                Ver Documento Completo
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleReprocess(detail.id)}
+                                                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
+                                                            >
+                                                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                                                Reprocessar
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Extracted data */}
+                                                    <div>
+                                                        <h4 className="mb-3 text-sm font-medium text-slate-300">
+                                                            Dados Extraídos
+                                                        </h4>
+                                                        {/* Fields */}
+                                                        {detail.fields && detail.fields.length > 0 && (
+                                                            <div className="mb-4 space-y-2">
+                                                                {detail.fields.map((field, i) => (
+                                                                    <div
+                                                                        key={i}
+                                                                        className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2"
+                                                                    >
+                                                                        <span className="text-sm text-slate-400">
+                                                                            {field.field_key}
+                                                                        </span>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-sm font-medium text-slate-200">
+                                                                                {field.field_value}
+                                                                            </span>
+                                                                            <span className="text-xs text-slate-600">
+                                                                                {Math.round(field.confidence * 100)}%
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Tables */}
+                                                        {detail.tables &&
+                                                            detail.tables.map((table, tIdx) => (
+                                                                <div
+                                                                    key={tIdx}
+                                                                    className="mt-4 overflow-x-auto rounded-lg border border-white/[0.06]"
+                                                                >
+                                                                    <table className="w-full text-sm">
+                                                                        <thead>
+                                                                            <tr className="border-b border-white/[0.06] bg-white/[0.03]">
+                                                                                {table.headers.map((h, i) => (
+                                                                                    <th
+                                                                                        key={i}
+                                                                                        className="px-3 py-2 text-left text-xs font-medium text-slate-400"
+                                                                                    >
+                                                                                        {h}
+                                                                                    </th>
+                                                                                ))}
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {table.rows.map((row, rIdx) => (
+                                                                                <tr
+                                                                                    key={rIdx}
+                                                                                    className="border-b border-white/[0.04] last:border-0"
+                                                                                >
+                                                                                    {row.map((cell, cIdx) => (
+                                                                                        <td
+                                                                                            key={cIdx}
+                                                                                            className="px-3 py-2 text-slate-300"
+                                                                                        >
+                                                                                            {cell}
+                                                                                        </td>
+                                                                                    ))}
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            ))}
+
+                                                        {detail.extracted_text?.trim() && (
+                                                            <details className="mt-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+                                                                <summary className="cursor-pointer px-3 py-2 text-sm text-slate-300">
+                                                                    Texto extraído
+                                                                </summary>
+                                                                <pre className="max-h-[420px] overflow-auto px-3 pb-3 pt-2 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
+                                                                    {detail.extracted_text}
+                                                                </pre>
+                                                            </details>
+                                                        )}
+
+                                                        {detail.error_message && (
+                                                            <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
+                                                                {detail.error_message}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : null}
+                                        </div>
                                     )}
                                 </div>
+                            ))}
+
+                        {/* Empty state */}
+                        {!loading && documents.length === 0 && (
+                            <div className="py-12 text-center">
+                                <FileText className="mx-auto h-10 w-10 text-slate-600" />
+                                <p className="mt-3 text-sm text-slate-500">
+                                    Nenhum documento encontrado
+                                </p>
                             </div>
-
-                            {/* Expanded detail */}
-                            {expandedId === doc.id && (
-                                <div className="border-b border-white/[0.06] bg-[#0B1120]/50 p-6">
-                                    {detailLoading ? (
-                                        <div className="flex items-center justify-center py-8">
-                                            <Loader2 className="h-6 w-6 animate-spin text-[#136dec]" />
-                                        </div>
-                                    ) : detail ? (
-                                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                                            {/* Document preview */}
-                                            <div>
-                                                <h4 className="mb-3 text-sm font-medium text-slate-300">
-                                                    Preview do Documento
-                                                </h4>
-                                                <div className="aspect-[4/3] overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                                                    {detail.mime_type === "application/pdf" ? (
-                                                        previewUrl ? (
-                                                            <iframe
-                                                                src={previewUrl}
-                                                                className="h-full w-full"
-                                                                title={detail.filename}
-                                                            />
-                                                        ) : (
-                                                            <div className="flex h-full items-center justify-center">
-                                                                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-                                                            </div>
-                                                        )
-                                                    ) : detail.mime_type?.startsWith("image/") ? (
-                                                        previewUrl ? (
-                                                            /* eslint-disable-next-line @next/next/no-img-element */
-                                                            <img
-                                                                src={previewUrl}
-                                                                alt={detail.filename}
-                                                                className="h-full w-full object-contain"
-                                                            />
-                                                        ) : (
-                                                            <div className="flex h-full items-center justify-center">
-                                                                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-                                                            </div>
-                                                        )
-                                                    ) : (
-                                                        <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                                                            Preview não disponível para este tipo de arquivo
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="mt-3 flex gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleDownload(detail)}
-                                                        className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
-                                                    >
-                                                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                                                        Ver Documento Completo
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleReprocess(detail.id)}
-                                                        className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
-                                                    >
-                                                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                                                        Reprocessar
-                                                    </Button>
-                                                </div>
-                                            </div>
-
-                                            {/* Extracted data */}
-                                            <div>
-                                                <h4 className="mb-3 text-sm font-medium text-slate-300">
-                                                    Dados Extraídos
-                                                </h4>
-                                                {/* Fields */}
-                                                {detail.fields && detail.fields.length > 0 && (
-                                                    <div className="mb-4 space-y-2">
-                                                        {detail.fields.map((field, i) => (
-                                                            <div
-                                                                key={i}
-                                                                className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2"
-                                                            >
-                                                                <span className="text-sm text-slate-400">
-                                                                    {field.field_key}
-                                                                </span>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-sm font-medium text-slate-200">
-                                                                        {field.field_value}
-                                                                    </span>
-                                                                    <span className="text-xs text-slate-600">
-                                                                        {Math.round(field.confidence * 100)}%
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                {/* Tables */}
-                                                {detail.tables &&
-                                                    detail.tables.map((table, tIdx) => (
-                                                        <div
-                                                            key={tIdx}
-                                                            className="mt-4 overflow-x-auto rounded-lg border border-white/[0.06]"
-                                                        >
-                                                            <table className="w-full text-sm">
-                                                                <thead>
-                                                                    <tr className="border-b border-white/[0.06] bg-white/[0.03]">
-                                                                        {table.headers.map((h, i) => (
-                                                                            <th
-                                                                                key={i}
-                                                                                className="px-3 py-2 text-left text-xs font-medium text-slate-400"
-                                                                            >
-                                                                                {h}
-                                                                            </th>
-                                                                        ))}
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {table.rows.map((row, rIdx) => (
-                                                                        <tr
-                                                                            key={rIdx}
-                                                                            className="border-b border-white/[0.04] last:border-0"
-                                                                        >
-                                                                            {row.map((cell, cIdx) => (
-                                                                                <td
-                                                                                    key={cIdx}
-                                                                                    className="px-3 py-2 text-slate-300"
-                                                                                >
-                                                                                    {cell}
-                                                                                </td>
-                                                                            ))}
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    ))}
-
-                                                {detail.extracted_text?.trim() && (
-                                                    <details className="mt-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                                                        <summary className="cursor-pointer px-3 py-2 text-sm text-slate-300">
-                                                            Texto extraído
-                                                        </summary>
-                                                        <pre className="max-h-[420px] overflow-auto px-3 pb-3 pt-2 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
-                                                            {detail.extracted_text}
-                                                        </pre>
-                                                    </details>
-                                                )}
-
-                                                {detail.error_message && (
-                                                    <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
-                                                        {detail.error_message}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : null}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-
-                {/* Empty state */}
-                {!loading && documents.length === 0 && (
-                    <div className="py-12 text-center">
-                        <FileText className="mx-auto h-10 w-10 text-slate-600" />
-                        <p className="mt-3 text-sm text-slate-500">
-                            Nenhum documento encontrado
-                        </p>
+                        )}
                     </div>
-                )}
+                </div>
             </div>
 
             {/* Pagination */}
