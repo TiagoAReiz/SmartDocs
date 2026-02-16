@@ -101,7 +101,6 @@ async def reprocess_document(
     result = await db.execute(
         select(Document).where(
             Document.id == document_id,
-            Document.user_id == current_user.id,
         )
     )
     doc = result.scalar_one_or_none()
@@ -146,7 +145,7 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
 ):
     """List documents with search, status filter, and pagination."""
-    query = select(Document).where(Document.user_id == current_user.id)
+    query = select(Document)
 
     # Apply search filter
     if search:
@@ -201,7 +200,6 @@ async def get_document(
         .options(selectinload(Document.fields), selectinload(Document.tables))
         .where(
             Document.id == document_id,
-            Document.user_id == current_user.id,
         )
     )
     doc = result.scalar_one_or_none()
@@ -239,7 +237,6 @@ async def get_document_file(
     result = await db.execute(
         select(Document).where(
             Document.id == document_id,
-            Document.user_id == current_user.id,
         )
     )
     doc = result.scalar_one_or_none()

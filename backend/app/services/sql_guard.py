@@ -17,13 +17,12 @@ def validate_sql(sql: str, user_id: int | None = None, is_admin: bool = False) -
     Rules:
     - Only SELECT statements are allowed
     - LIMIT 100 is injected if no LIMIT is present
-    - WHERE documents.user_id = :user_id is injected for non-admin users
     - Dangerous keywords are blocked
 
     Args:
         sql: The SQL query to validate.
-        user_id: The current user's ID (for row-level filtering).
-        is_admin: Whether the user is an admin (bypasses user_id filter).
+        user_id: The current user's ID.
+        is_admin: Whether the user is an admin.
 
     Returns:
         The sanitized SQL query.
@@ -77,39 +76,6 @@ def validate_sql(sql: str, user_id: int | None = None, is_admin: bool = False) -
     if "LIMIT" not in sql_upper:
         sql = f"{sql}\nLIMIT 100"
         logger.debug("LIMIT 100 injetado automaticamente")
-
-    # Inject user_id filter for non-admin users
-    if not is_admin and user_id is not None:
-        user_filter = f"documents.user_id = {user_id}"
-
-        if "WHERE" in sql_upper:
-            # Add to existing WHERE clause
-            sql = re.sub(
-                r"\bWHERE\b",
-                f"WHERE {user_filter} AND",
-                sql,
-                count=1,
-                flags=re.IGNORECASE,
-            )
-        else:
-            # Find the right place to inject WHERE (before GROUP BY, ORDER BY, LIMIT, etc.)
-            inject_before = re.search(
-                r"\b(GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT)\b",
-                sql,
-                flags=re.IGNORECASE,
-            )
-            if inject_before:
-                pos = inject_before.start()
-                sql = f"{sql[:pos]}WHERE {user_filter}\n{sql[pos:]}"
-            else:
-                # Append before LIMIT if it's at the end
-                if sql.rstrip().upper().endswith("LIMIT 100"):
-                    parts = sql.rsplit("LIMIT", 1)
-                    sql = f"{parts[0]}WHERE {user_filter}\nLIMIT{parts[1]}"
-                else:
-                    sql = f"{sql}\nWHERE {user_filter}"
-
-        logger.debug(f"Filtro user_id={user_id} injetado")
 
     logger.info(f"SQL validado: {sql[:200]}...")
     return sql
