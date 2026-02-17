@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 from azure.core.exceptions import ResourceExistsError
 from azure.storage.blob import ContentSettings
@@ -99,13 +99,13 @@ class StorageService:
             idx = parts.index(self._container_name)
             container_name = parts[idx]
             blob_name = "/".join(parts[idx + 1 :])
-            return container_name, blob_name
+            return container_name, unquote(blob_name)
         if len(parts) >= 2:
             container_name = parts[-2]
             blob_name = parts[-1]
-            return container_name, blob_name
+            return container_name, unquote(blob_name)
         logger.warning(f"URL de blob inesperada: {blob_url}")
-        return self._container_name, parts[-1] if parts else ""
+        return self._container_name, unquote(parts[-1]) if parts else ""
 
 
 storage_service = StorageService()

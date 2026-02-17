@@ -47,8 +47,11 @@ def ensure_upload_dir(upload_dir: str) -> Path:
 
 def safe_filename(filename: str) -> str:
     """Sanitize a filename for safe storage."""
-    # Keep only the basename, replace unsafe chars
+    import re
+    # Keep only the basename
     name = os.path.basename(filename)
     # Replace spaces with underscores
     name = name.replace(" ", "_")
+    # Remove any character that isn't alphanumeric, underscore, dash, or dot
+    name = re.sub(r"[^a-zA-Z0-9_.-]", "", name)
     return name
