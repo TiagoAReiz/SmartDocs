@@ -1,4 +1,4 @@
-from azure.ai.documentintelligence import DocumentIntelligenceClient
+from azure.ai.documentintelligence.aio import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import DocumentAnalysisFeature
 from azure.core.credentials import AzureKeyCredential
 from azure.core.exceptions import HttpResponseError
@@ -14,12 +14,12 @@ def _get_client() -> DocumentIntelligenceClient:
     )
 
 
-def _analyze_document(
+async def _analyze_document(
     client: DocumentIntelligenceClient,
     model_id: str,
     file_bytes: bytes,
 ):
-    poller = client.begin_analyze_document(
+    poller = await client.begin_analyze_document(
         model_id,
         file_bytes,
         content_type="application/octet-stream",
@@ -27,7 +27,7 @@ def _analyze_document(
             DocumentAnalysisFeature.KEY_VALUE_PAIRS,
         ],
     )
-    return poller.result()
+    return await poller.result()
 
 
 async def extract_document(file_source: str | bytes) -> dict:
@@ -43,8 +43,6 @@ async def extract_document(file_source: str | bytes) -> dict:
     if not (settings.AZURE_DI_ENDPOINT and settings.AZURE_DI_KEY):
         raise RuntimeError("Azure Document Intelligence não configurado")
 
-    client = _get_client()
-
     if isinstance(file_source, str):
         logger.info(f"Extraindo dados do documento: {file_source}")
         with open(file_source, "rb") as f:
@@ -57,24 +55,27 @@ async def extract_document(file_source: str | bytes) -> dict:
         f"Azure DI endpoint={settings.AZURE_DI_ENDPOINT} model={settings.AZURE_DI_MODEL_ID}"
     )
 
-    try:
-        result = _analyze_document(client, settings.AZURE_DI_MODEL_ID, file_bytes)
-    except HttpResponseError as e:
-        status_code = getattr(e, "status_code", None)
-        error_code = getattr(getattr(e, "error", None), "code", None)
-        should_fallback = (
-            status_code == 404
-            or error_code == "ModelNotFound"
-            or "ModelNotFound" in str(e)
-        )
-        if should_fallback:
-            fallback_model = "prebuilt-layout"
-            logger.warning(
-                f"Modelo {settings.AZURE_DI_MODEL_ID} não encontrado. Tentando {fallback_model}."
+    async with _get_client() as client:
+        try:
+            result = await _analyze_document(
+                client, settings.AZURE_DI_MODEL_ID, file_bytes
             )
-            result = _analyze_document(client, fallback_model, file_bytes)
-        else:
-            raise
+        except HttpResponseError as e:
+            status_code = getattr(e, "status_code", None)
+            error_code = getattr(getattr(e, "error", None), "code", None)
+            should_fallback = (
+                status_code == 404
+                or error_code == "ModelNotFound"
+                or "ModelNotFound" in str(e)
+            )
+            if should_fallback:
+                fallback_model = "prebuilt-layout"
+                logger.warning(
+                    f"Modelo {settings.AZURE_DI_MODEL_ID} não encontrado. Tentando {fallback_model}."
+                )
+                result = await _analyze_document(client, fallback_model, file_bytes)
+            else:
+                raise
 
     # Extract text content
     extracted_text = result.content or ""

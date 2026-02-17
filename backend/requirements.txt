@@ -19,6 +19,11 @@ openai>=1.60
 azure-identity>=1.19
 azure-storage-blob>=12.24
 
+# LangChain
+langchain>=0.3
+langchain-openai>=0.3
+langgraph>=0.2
+
 # Document conversion
 openpyxl>=3.1
 python-docx>=1.1
