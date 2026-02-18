@@ -5,9 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document, DocumentField, DocumentTable, DocumentStatus
 from app.models.document_log import DocumentLog
+from app.models.document_chunk import DocumentChunk
 from app.services.conversion_service import convert_to_pdf
 from app.services.extraction_service import extract_document
 from app.services.storage_service import storage_service
+from app.services.chunking_service import create_chunks
+from app.services.embedding_service import generate_embeddings
 from app.utils.file_utils import (
     get_extension,
     get_mime_type,
@@ -157,6 +160,52 @@ async def process_document(document_id: int, db: AsyncSession) -> None:
             f"{len(extraction['tables'])} tabelas extraídos",
         )
         db.add(log)
+
+        # Step 4: Create semantic chunks and embeddings for RAG
+        try:
+            extracted_text = extraction.get("extracted_text", "")
+            if extracted_text and extracted_text.strip():
+                chunks = create_chunks(extracted_text)
+                if chunks:
+                    logger.info(
+                        f"Documento {doc.id}: {len(chunks)} chunks criados, "
+                        f"gerando embeddings..."
+                    )
+                    texts = [c.content for c in chunks]
+                    embeddings = await generate_embeddings(texts)
+
+                    for chunk, embedding in zip(chunks, embeddings):
+                        doc_chunk = DocumentChunk(
+                            document_id=doc.id,
+                            chunk_index=chunk.chunk_index,
+                            content=chunk.content,
+                            section_type=chunk.section_type,
+                            token_count=chunk.token_count,
+                            embedding=embedding,
+                            metadata_json=chunk.metadata,
+                        )
+                        db.add(doc_chunk)
+
+                    log = DocumentLog(
+                        document_id=doc.id,
+                        event_type="rag_indexing_complete",
+                        message=f"{len(chunks)} chunks indexados para RAG",
+                    )
+                    db.add(log)
+                    logger.info(
+                        f"Documento {doc.id}: {len(chunks)} chunks indexados para RAG"
+                    )
+        except Exception as rag_err:
+            # RAG indexing failure should NOT fail the whole document processing
+            logger.warning(
+                f"Documento {doc.id}: falha na indexação RAG (não-crítico): {rag_err}"
+            )
+            log = DocumentLog(
+                document_id=doc.id,
+                event_type="rag_indexing_failed",
+                message=f"Falha na indexação RAG: {rag_err}",
+            )
+            db.add(log)
 
         await db.commit()
         logger.info(f"Documento {doc.id} processado com sucesso")

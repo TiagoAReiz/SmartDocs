@@ -18,14 +18,14 @@ from app.services.sql_guard import validate_sql, SQLGuardError
 
 
 # Tables hidden from the agent for security
-_HIDDEN_TABLES = {"users", "alembic_version"}
+_HIDDEN_TABLES = {"users", "alembic_version", "chat_messages", "document_chunks"}
 
 
 async def _fetch_db_schema() -> str:
     """Dynamically introspect the database and return schema description.
 
     Queries the actual DB so any migration/column change is picked up
-    automatically.  Sensitive tables (users, alembic_version) are excluded.
+    automatically.  Sensitive tables are excluded.
     """
 
     def _inspect_sync(connection):
@@ -63,24 +63,62 @@ async def _fetch_db_schema() -> str:
 
 def _build_sql_prompt(schema: str) -> str:
     """Build the SQL generation prompt with the given schema."""
-    return f"""Gere uma query SELECT PostgreSQL para responder a pergunta do usuário.
+    return f"""Você é um gerador de SQL PostgreSQL para o sistema SmartDocs.
+O sistema extrai dados de documentos via OCR e os armazena em múltiplas camadas.
+
 {schema}
 
-Regras:
-1. Gere APENAS SELECT queries válidas para PostgreSQL
+## Tipos de dado por tabela
+
+### documents
+- extracted_text: texto OCR completo do documento (pode conter parágrafos, cláusulas, qualquer conteúdo)
+- status: 'uploaded', 'processing', 'processed', 'failed'
+- type: tipo classificado (ex: 'contrato', 'relatorio')
+- raw_json: metadados da extração (JSON)
+
+### document_fields
+- field_key: nome do campo extraído (ex: "CNPJ", "RAZÃO SOCIAL", "DATA DE ASSINATURA", "CONTRATO Nº")
+- field_value: valor em texto do campo (pode conter datas em DD/MM/AAAA, valores monetários, nomes, etc.)
+- confidence: confiança da extração (0.0 a 1.0)
+- IMPORTANTE: os nomes dos campos (field_key) variam conforme o documento. Use ILIKE para busca flexível.
+
+### document_tables
+- headers: JSON array com nomes das colunas (ex: ["Item", "Quantidade", "Valor Unitário"])
+- rows: JSON array de arrays com os dados (ex: [["Serviço A", "10", "R$ 500,00"]])
+- Para consultar dentro do JSON, use: headers::text ILIKE '%termo%' ou rows::text ILIKE '%termo%'
+
+### contracts
+- contract_value: NUMERIC(15,2) — valor monetário
+- start_date, end_date: DATE — datas em formato ISO
+- status: texto livre (ex: "ativo", "encerrado")
+
+### document_logs
+- event_type: tipo do evento ('upload', 'extraction_complete', 'processing_failed', 'conversion_complete')
+- message: descrição do evento
+
+## Regras SQL
+
+1. Gere APENAS queries SELECT válidas para PostgreSQL
 2. NUNCA use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE
 3. Use JOINs quando necessário para relacionar tabelas
 4. Sempre inclua aliases descritivos para as colunas
 5. Para datas, use funções PostgreSQL (NOW(), INTERVAL, etc.)
 6. Retorne APENAS o SQL, sem explicações, sem markdown, sem blocos de código
-7. Use aspas duplas para nomes de colunas com espaços ou caracteres especiais
-8. Sempre inclua a tabela documents no FROM sem alias (use exatamente "documents")
-9. Quando consultar outras tabelas, sempre relacione com documents
-10. Para perguntas sobre contratos assinados, prefira buscar em document_fields usando chaves como "DATA DE ASSINATURA", "CONTRATO Nº", "RAZÃO SOCIAL", "CNPJ"
-11. Quando a data estiver em texto DD/MM/AAAA, filtre usando to_date(valor, 'DD/MM/YYYY') = DATE 'YYYY-MM-DD'
-12. Para consolidar dados de várias chaves do mesmo documento, use agregação com MAX(CASE WHEN ... THEN ... END) e GROUP BY documents.id
-13. Nunca use SELECT *; selecione apenas colunas necessárias e use aliases amigáveis
-14. Nunca aplique to_date em document_fields.field_value sem antes filtrar a chave do campo
+7. Sempre inclua a tabela documents no FROM quando precisar filtrar por documento
+8. Para buscar texto livre em extracted_text, use: documents.extracted_text ILIKE '%termo%'
+9. Para buscar campos por nome flexível: document_fields.field_key ILIKE '%nome_aproximado%'
+10. Para consolidar múltiplos campos do MESMO documento:
+    MAX(CASE WHEN df.field_key ILIKE '%chave%' THEN df.field_value END) AS alias
+    com GROUP BY documents.id
+11. Para filtrar por data em document_fields.field_value (formato DD/MM/AAAA):
+    to_date(df.field_value, 'DD/MM/YYYY') — MAS SOMENTE após filtrar por field_key primeiro
+12. Para buscar dentro de JSON em document_tables:
+    dt.headers::text ILIKE '%termo%' ou dt.rows::text ILIKE '%termo%'
+13. Nunca use SELECT *; selecione apenas colunas necessárias
+14. Use LIMIT razoável (máx 100 linhas)
+15. Para descobrir quais field_keys existem, use:
+    SELECT DISTINCT field_key FROM document_fields ORDER BY field_key
+16. Para contar documentos por tipo/status, agrupe por documents.type ou documents.status
 """
 
 

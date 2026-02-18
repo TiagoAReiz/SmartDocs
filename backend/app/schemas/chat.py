@@ -13,6 +13,7 @@ class ChatResponse(BaseModel):
     sql_used: str | None = None
     row_count: int = 0
     data: list[dict[str, Any]] = []
+    sources: list[dict[str, Any]] = []
 
 
 class ChatHistoryItem(BaseModel):
