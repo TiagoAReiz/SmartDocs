@@ -133,10 +133,15 @@ def make_rag_search_tool(
 
             # Step 3: Format results with context
             chunks_text = []
+            unique_docs = set()
+
             for i, row in enumerate(rows, 1):
                 similarity = 1 - row.distance
                 section_label = row.section_type or "texto"
                 doc_type_label = f", Tipo: {row.doc_type}" if row.doc_type else ""
+                
+                unique_docs.add(f"{row.filename} (ID:{row.document_id})")
+                
                 chunks_text.append(
                     f"--- Trecho {i} (Documento: {row.filename} [ID:{row.document_id}]"
                     f"{doc_type_label}, "
@@ -149,7 +154,11 @@ def make_rag_search_tool(
                     f"similaridade={similarity:.0%} seção={section_label}"
                 )
 
-            header = f"Encontrados {len(rows)} trechos relevantes:\n\n"
+            docs_summary = ", ".join(sorted(unique_docs))
+            header = (
+                f"Encontrados {len(rows)} trechos relevantes em {len(unique_docs)} documento(s):\n"
+                f"[{docs_summary}]\n\n"
+            )
             return header + "\n\n".join(chunks_text)
 
         except Exception as e:
