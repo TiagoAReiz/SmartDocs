@@ -50,10 +50,13 @@ def make_rag_search_tool(
             Os trechos mais relevantes encontrados nos documentos.
         """
         logger.info(f"[Tool rag_search] Buscando: {query[:100]}")
+        logger.info(f"[Tool rag_search] user_id={user_id}, is_admin={is_admin}")
 
         try:
             # Step 1: Generate embedding for the query
+            logger.info("[Tool rag_search] Gerando embedding da query...")
             query_embedding = await generate_single_embedding(query)
+            logger.info(f"[Tool rag_search] Embedding gerado ({len(query_embedding)} dimensões)")
 
             # Step 2: Build similarity search query with pgvector
             # Using cosine distance operator <=> for similarity ranking
@@ -104,8 +107,10 @@ def make_rag_search_tool(
                 )
 
             rows = result.fetchall()
+            logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks relevantes")
 
             if not rows:
+                logger.info("[Tool rag_search] Nenhum chunk encontrado no banco")
                 return "Nenhum trecho relevante encontrado nos documentos processados."
 
             # Step 3: Format results with context

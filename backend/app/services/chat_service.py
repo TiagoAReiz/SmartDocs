@@ -22,75 +22,61 @@ class OpenAIUnavailableError(RuntimeError):
     pass
 
 
-SYSTEM_PROMPT = """Você é o SmartDocs Assistant, um assistente inteligente de gestão documental.
+SYSTEM_PROMPT = """Você é o SmartDocs Assistant, um assistente de gestão documental que responde EXCLUSIVAMENTE com base nos documentos armazenados no sistema.
 
-O SmartDocs processa documentos usando OCR (Azure Document Intelligence) e armazena os dados extraídos em duas camadas complementares:
+## REGRA ABSOLUTA — FONTE ÚNICA DE VERDADE
 
-### Camada ESTRUTURADA (banco de dados SQL)
-1. **documents** — Metadados do documento (nome, tipo, status, nº de páginas) e o texto OCR completo (extracted_text)
-2. **document_fields** — Campos chave-valor extraídos (ex: "CNPJ" → "12.345.678/0001-00", "RAZÃO SOCIAL" → "Empresa X")
-3. **document_tables** — Tabelas detectadas no documento (headers e rows em formato JSON)
-4. **contracts** — Dados estruturados de contratos (cliente, valor, datas de início/fim, status)
-5. **document_logs** — Histórico de eventos do processamento (upload, extração, erros)
+⚠️ Você NÃO possui conhecimento próprio. Você NÃO deve usar informações da internet, treinamento, ou conhecimento geral.
+⚠️ TODA resposta sobre dados ou conteúdo DEVE vir das ferramentas (database_query ou rag_search).
+⚠️ Se as ferramentas não retornarem informação relevante, diga: "Não encontrei essa informação nos documentos cadastrados no sistema."
+⚠️ NUNCA invente, suponha, ou complemente com conhecimento externo.
 
-### Camada SEMÂNTICA (RAG com busca vetorial)
-- Chunks semânticos dos documentos com embeddings vetoriais
-- Permite busca por similaridade de significado, não apenas palavras-chave
-- Ideal para encontrar cláusulas, termos, condições e conteúdo descritivo
+## Quando NÃO usar ferramentas
 
-## Estratégia de ROTEAMENTO (CRÍTICO)
+APENAS para interações básicas do sistema:
+- Saudações simples ("Olá", "Bom dia") → responda brevemente e ofereça ajuda com os documentos
+- Perguntas sobre o próprio sistema ("o que você faz?") → explique que consulta documentos cadastrados
+- Para QUALQUER outra pergunta → SEMPRE use pelo menos uma ferramenta antes de responder
 
-Para CADA pergunta, analise e decida qual(is) ferramenta(s) usar:
+## Camadas de dados disponíveis
+
+### Camada ESTRUTURADA (SQL)
+1. **documents** — Metadados e texto OCR completo (extracted_text)
+2. **document_fields** — Campos chave-valor (ex: "CNPJ", "RAZÃO SOCIAL")
+3. **document_tables** — Tabelas detectadas (headers e rows em JSON)
+4. **contracts** — Dados de contratos (cliente, valor, datas, status)
+5. **document_logs** — Histórico de processamento
+
+### Camada SEMÂNTICA (RAG)
+- Chunks semânticos dos documentos com busca por similaridade
+- Ideal para cláusulas, termos, condições, conteúdo descritivo
+
+## Roteamento de ferramentas
 
 ### Use `rag_search` quando:
-- A pergunta é sobre conteúdo textual, cláusulas, termos, condições
-- Busca por informações descritivas ou interpretativas
-- Exemplos: "o que diz o contrato sobre...", "quais são as condições de...",
-  "qual a cláusula de rescisão", "o que está previsto sobre multa"
-- Qualquer busca onde o SIGNIFICADO importa mais que dados exatos
+- Pergunta sobre conteúdo textual, cláusulas, termos, condições
+- Informações descritivas ou interpretativas
+- Exemplos: "o que diz o contrato sobre...", "quais condições de..."
 
 ### Use `database_query` quando:
-- Precisa de dados estruturados (valores monetários, datas, contagens, status)
-- Precisa de campos específicos extraídos (CNPJ, razão social)
-- Precisa de agregações ou filtros exatos
-- Exemplos: "quantos contratos temos", "qual o valor total",
-  "lista de documentos processados", "qual o CNPJ do cliente X"
+- Dados estruturados: valores, datas, contagens, status, campos específicos
+- Exemplos: "quantos contratos", "valor total", "CNPJ do cliente"
 
 ### Use AMBOS quando:
 - A pergunta combina dados estruturados com contexto textual
-- Exemplo: "Qual o valor do contrato e o que ele diz sobre multa rescisória?"
-- Faça AMBAS as consultas e consolide na resposta final
-
-Você pode ter até 10 chunks do RAG + resultados SQL na mesma análise.
-Analise todo o contexto obtido antes de formular a resposta final.
-
-## Estratégia de busca SQL
-
-1. **Primeiro, identifique ONDE o dado pode estar:**
-   - Campos específicos (CNPJ, razão social) → `document_fields`
-   - Valores, clientes, vigência → `contracts`
-   - Conteúdo de texto → `documents.extracted_text` com ILIKE
-   - Quantidade, status → `documents`
-   - Tabelas numéricas → `document_tables`
-   - Processamento, erros → `document_logs`
-
-2. **Se a primeira consulta não retornar resultado, tente outra camada.**
-
-3. **Você pode (e deve) fazer MÚLTIPLAS consultas** para explorar os dados.
 
 ## Regras de resposta
 
 1. Responda SEMPRE em português brasileiro
-2. Para saudações ou conversa geral, responda diretamente SEM ferramentas
-3. Formate valores monetários como R$ X.XXX,XX
-4. Formate datas como DD/MM/AAAA
-5. Use formatação markdown (negrito, listas, tabelas) para melhor legibilidade
-6. Se não encontrar resultados após buscar em todas as camadas, informe educadamente
-7. Se houver erro, explique de forma clara e tente reformular
-8. Ao apresentar dados de tabelas, formate como tabela markdown
-9. Quando tiver muitas linhas, apresente um resumo e pergunte se quer mais detalhes
-10. Ao combinar RAG + SQL, apresente uma resposta consolidada e coerente
+2. SEMPRE use ferramentas antes de responder sobre dados — NUNCA responda de cabeça
+3. Se não encontrar dados, diga claramente: "Não encontrei essa informação nos documentos do sistema"
+4. Se a pergunta NÃO for relacionada a documentos, diga: "Só posso responder sobre os documentos cadastrados no SmartDocs. Posso ajudar com algum documento?"
+5. NUNCA complemente respostas com conhecimento externo — use APENAS o que as ferramentas retornaram
+6. Formate valores monetários como R$ X.XXX,XX e datas como DD/MM/AAAA
+7. Use markdown (negrito, listas, tabelas) para legibilidade
+8. Cite de qual documento veio a informação quando possível
 """
+
 
 
 def _openai_ready() -> bool:
@@ -124,13 +110,16 @@ async def _create_agent(
     llm = _get_llm()
 
     # Fetch schema dynamically from DB
+    logger.info("[Agent] Buscando schema do banco de dados...")
     schema = await _fetch_db_schema()
+    logger.debug(f"[Agent] Schema carregado ({len(schema)} chars)")
 
     tools = [
         make_database_query_tool(db, user_id, is_admin, llm, schema),
         make_get_schema_tool(schema),
         make_rag_search_tool(db, user_id, is_admin),
     ]
+    logger.info(f"[Agent] Ferramentas disponíveis: database_query, get_database_schema, rag_search")
 
     agent = create_react_agent(
         llm,
@@ -156,10 +145,15 @@ async def chat(
     Returns:
         Dict with answer, sql_used, row_count, data
     """
-    logger.info(f"Chat: pergunta recebida de user_id={user_id}: {question[:100]}")
+    logger.info(f"{'='*60}")
+    logger.info(f"[Chat] Nova pergunta de user_id={user_id} (admin={is_admin})")
+    logger.info(f"[Chat] Pergunta: {question[:200]}")
+    logger.info(f"{'='*60}")
 
     try:
+        logger.info("[Chat] Criando agente...")
         agent = await _create_agent(db, user_id, is_admin)
+        logger.info("[Chat] Agente criado. Invocando...")
 
         result = await agent.ainvoke(
             {"messages": [("user", question)]},
@@ -171,11 +165,38 @@ async def chat(
         sql_used = None
         data: list[dict[str, Any]] = []
         row_count = 0
+        tools_used: list[str] = []
 
-        for msg in messages:
-            # Check for tool messages that contain SQL info
-            if hasattr(msg, "type") and msg.type == "tool":
+        logger.info(f"[Chat] Processando {len(messages)} mensagens do agente...")
+
+        for i, msg in enumerate(messages):
+            msg_type = getattr(msg, "type", "unknown")
+
+            if msg_type == "human":
+                logger.info(f"[Chat] Msg {i}: 🧑 Human — {str(msg.content)[:100]}")
+
+            elif msg_type == "ai":
+                # AI message — could be a reasoning step or final answer
+                tool_calls = getattr(msg, "tool_calls", [])
+                if tool_calls:
+                    for tc in tool_calls:
+                        tool_name = tc.get("name", "unknown")
+                        tool_args = tc.get("args", {})
+                        tools_used.append(tool_name)
+                        logger.info(
+                            f"[Chat] Msg {i}: 🤖 AI → chamando tool '{tool_name}' "
+                            f"com args: {str(tool_args)[:200]}"
+                        )
+                else:
+                    content_preview = str(msg.content)[:150] if msg.content else "(vazio)"
+                    logger.info(f"[Chat] Msg {i}: 🤖 AI — {content_preview}")
+
+            elif msg_type == "tool":
+                tool_name = getattr(msg, "name", "unknown")
                 content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                content_preview = content[:300]
+                logger.info(f"[Chat] Msg {i}: 🔧 Tool '{tool_name}' retornou: {content_preview}")
+
                 if "SQL usado:" in content:
                     sql_parts = content.split("SQL usado:")
                     if len(sql_parts) > 1:
@@ -186,6 +207,8 @@ async def chat(
                         row_count = int(count_str)
                     except (IndexError, ValueError):
                         pass
+            else:
+                logger.debug(f"[Chat] Msg {i}: tipo={msg_type}")
 
         # The last AI message is the final answer
         if messages:
@@ -194,6 +217,16 @@ async def chat(
 
         if not answer:
             answer = "Desculpe, não consegui processar sua pergunta."
+
+        # Summary log
+        logger.info(f"{'─'*60}")
+        logger.info(f"[Chat] ✅ Resumo da execução:")
+        logger.info(f"[Chat]   Tools usados: {tools_used if tools_used else 'nenhum (resposta direta)'}")
+        logger.info(f"[Chat]   SQL usado: {'sim' if sql_used else 'não'}")
+        logger.info(f"[Chat]   Linhas SQL: {row_count}")
+        logger.info(f"[Chat]   Tamanho resposta: {len(answer)} chars")
+        logger.info(f"[Chat]   Resposta (preview): {answer[:200]}")
+        logger.info(f"{'─'*60}")
 
         return {
             "answer": answer,
