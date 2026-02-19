@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -43,7 +43,7 @@ async def _get_or_create_thread(
                 raise HTTPException(status_code=403, detail="Not authorized to access this thread")
             
             # Update timestamp
-            thread.updated_at = datetime.utcnow()
+            thread.updated_at = datetime.now(timezone.utc)
             return thread
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid thread_id format")
@@ -194,6 +194,14 @@ async def list_threads(
     
     result = await db.execute(query)
     threads = result.scalars().all()
+    
+    # Fix timezone: allow naive datetimes (stored as UTC) to be serialized with Z suffix
+    for t in threads:
+        if t.created_at and t.created_at.tzinfo is None:
+            t.created_at = t.created_at.replace(tzinfo=timezone.utc)
+        if t.updated_at and t.updated_at.tzinfo is None:
+            t.updated_at = t.updated_at.replace(tzinfo=timezone.utc)
+            
     print(f"DEBUG: Found {len(threads)} threads")
     return threads
 
