@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import type { ChatResponse, ChatHistoryMessage, ChatThread } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Bot, User, Menu, Sparkles, StopCircle } from "lucide-react";
+import { Send, Bot, User, Menu, Sparkles, StopCircle, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatSidebar } from "@/components/chat-sidebar";
@@ -212,6 +212,33 @@ export default function ChatPage() {
         }
     };
 
+    const handleExport = (data: Record<string, unknown>[], filename = "export.csv") => {
+        if (!data || data.length === 0) return;
+
+        const headers = Object.keys(data[0]);
+        const csvContent = [
+            headers.join(","),
+            ...data.map((row) =>
+                headers
+                    .map((header) => {
+                        const val = row[header];
+                        return typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val;
+                    })
+                    .join(",")
+            ),
+        ].join("\n");
+
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const suggestionChips = [
         "Extrair dados da última fatura",
         "Resumir contratos recentes",
@@ -328,6 +355,20 @@ export default function ChatPage() {
                                         {/* Data Table */}
                                         {msg.data && msg.data.length > 0 && (
                                             <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.08] bg-black/20">
+                                                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/[0.08]">
+                                                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                                        {msg.data.length} Resultados
+                                                    </span>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleExport(msg.data!, `smartdocs-export-${Date.now()}.csv`)}
+                                                        className="h-7 text-xs gap-1.5 hover:bg-white/10"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                        Exportar CSV
+                                                    </Button>
+                                                </div>
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full text-left text-xs">
                                                         <thead className="bg-white/5 text-muted-foreground">

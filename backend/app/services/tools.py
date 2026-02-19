@@ -5,7 +5,7 @@ These tools are injected into the LangChain agent so it can decide
 autonomously when to query the database vs. respond directly.
 """
 
-from typing import Any
+from typing import Any, Callable, Optional
 
 from langchain_core.tools import tool
 from loguru import logger
@@ -128,6 +128,7 @@ def make_database_query_tool(
     is_admin: bool,
     llm: Any,
     schema: str,
+    on_data_callback: Optional[Callable[[list[dict[str, Any]]], None]] = None,
 ) -> Any:
     """
     Factory that creates a database_query tool bound to the current
@@ -221,6 +222,14 @@ def make_database_query_tool(
         )
         if row_count > 20:
             results_text += f"\n... e mais {row_count - 20} linhas"
+
+        # Capture raw data via callback if provided
+        if on_data_callback:
+            logger.info(f"[Tool database_query] Executando callback com {len(data)} linhas")
+            try:
+                on_data_callback(data)
+            except Exception as e:
+                logger.error(f"[Tool database_query] Erro ao executar callback de dados: {e}")
 
         return (
             f"Resultados ({row_count} linhas):\n{results_text}\n"

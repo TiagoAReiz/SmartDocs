@@ -12,6 +12,7 @@ from uuid import UUID
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI
 from langgraph.prebuilt import create_react_agent
+from typing import Any, AsyncIterator, Callable, Optional
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -178,6 +179,7 @@ async def _create_agent(
     db: AsyncSession,
     user_id: int,
     is_admin: bool,
+    on_data_callback: Optional[Callable[[list[dict[str, Any]]], None]] = None,
 ):
     """Create a ReAct agent with tools bound to the current request context."""
     llm = _get_llm()
@@ -188,7 +190,7 @@ async def _create_agent(
     logger.debug(f"[Agent] Schema carregado ({len(schema)} chars)")
 
     tools = [
-        make_database_query_tool(db, user_id, is_admin, llm, schema),
+        make_database_query_tool(db, user_id, is_admin, llm, schema, on_data_callback),
         make_get_schema_tool(schema),
         make_rag_search_tool(db, user_id, is_admin),
     ]
@@ -253,8 +255,14 @@ async def chat(
     logger.info(f"{'='*60}")
 
     try:
+        data: list[dict[str, Any]] = []
         logger.info("[Chat] Criando agente...")
-        agent = await _create_agent(db, user_id, is_admin)
+        # Callback to capture data from tools
+        def on_data(rows: list[dict[str, Any]]):
+            # Use extend to modify the list in-place, avoiding scope issues
+            data.extend(rows)
+
+        agent = await _create_agent(db, user_id, is_admin, on_data)
         logger.info("[Chat] Agente criado. Invocando...")
 
         # Load history if thread_id is provided
@@ -271,7 +279,6 @@ async def chat(
         messages = result.get("messages", [])
         answer = ""
         sql_used = None
-        data: list[dict[str, Any]] = []
         row_count = 0
         tools_used: list[str] = []
 
@@ -393,7 +400,14 @@ async def chat_stream(
         logger.info(f"Chat stream: thread_id={thread_id}")
 
     try:
-        agent = await _create_agent(db, user_id, is_admin)
+        data: list[dict[str, Any]] = []
+
+        # Callback to capture data from tools
+        def on_data(rows: list[dict[str, Any]]):
+            # Use extend to modify the list in-place, avoiding scope issues
+            data.extend(rows)
+
+        agent = await _create_agent(db, user_id, is_admin, on_data)
 
         full_answer = ""
         sql_used = None
@@ -442,7 +456,9 @@ async def chat_stream(
             "type": "done",
             "answer": full_answer,
             "sql_used": sql_used,
+            "sql_used": sql_used,
             "row_count": row_count,
+            "data": data,
         }
 
     except OpenAIUnavailableError as e:
