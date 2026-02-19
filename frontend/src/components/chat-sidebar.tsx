@@ -51,7 +51,7 @@ export function ChatSidebar({
     }, [debouncedSearchTerm, onSearch]);
 
     return (
-        <div className={cn("flex h-full w-80 flex-col border-r border-white/[0.08] bg-card/30 backdrop-blur-sm", className)} {...props}>
+        <div className={cn("flex h-full w-full flex-col border-r border-white/[0.08] bg-card/30 backdrop-blur-sm", className)} {...props}>
             <div className="p-4 space-y-4">
                 <Button
                     onClick={onNewChat}

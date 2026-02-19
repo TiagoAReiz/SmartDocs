@@ -222,7 +222,7 @@ export default function ChatPage() {
     return (
         <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background">
             {/* Sidebar Desktop */}
-            <div className="hidden lg:block h-full border-r border-white/[0.08]">
+            <div className="hidden lg:block h-full w-80 border-r border-white/[0.08]">
                 <ChatSidebar
                     threads={threads}
                     selectedThreadId={selectedThreadId}
