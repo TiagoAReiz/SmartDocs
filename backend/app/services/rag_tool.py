@@ -32,6 +32,7 @@ def make_rag_search_tool(
         query: str,
         document_ids: str = "",
         document_type: str = "",
+        filename: str = "",
     ) -> str:
         """Busca semântica nos documentos extraídos usando RAG.
 
@@ -39,14 +40,16 @@ def make_rag_search_tool(
         cláusulas, termos, condições, obrigações, penalidades, conteúdo descritivo.
 
         IMPORTANTE: Se você sabe QUAIS documentos são relevantes (por ter usado
-        database_query antes), SEMPRE passe os document_ids para focar a busca.
+        database_query antes), SEMPRE passe os document_ids reais do banco de dados (tabela `documents.id`) para focar a busca.
+        ⚠️ NUNCA use os números de uma lista enumerada que você gerou (ex: "1. Documento") como se fossem IDs reais.
 
         Args:
             query: Pergunta ou termo de busca em linguagem natural.
-            document_ids: Opcional. IDs de documentos (ex: "42,87").
+            document_ids: Opcional. IDs reais da tabela `documents` (ex: "42,87").
                           Aceita formatos "1,2", "[1, 2]" ou lista.
             document_type: Opcional. Tipo de documento ou termo no nome do arquivo
                            (ex: "contrato", "relatorio").
+            filename: Opcional. Nome do arquivo (parcial ou completo) se você quiser filtrar um arquivo listado no histórico.
 
         Returns:
             Trechos relevantes encontrados, ou mensagem de que nada foi encontrado.
@@ -55,7 +58,7 @@ def make_rag_search_tool(
         logger.info(f"[Tool rag_search] Query: {query[:100]}")
         logger.info(
             f"[Tool rag_search] Filtros: document_ids={document_ids or '(todos)'}, "
-            f"document_type={document_type or '(todos)'}, "
+            f"document_type={document_type or '(todos)'}, filename={filename or '(todos)'}, "
             f"user_id={user_id}, is_admin={is_admin}"
         )
 
@@ -97,6 +100,12 @@ def make_rag_search_tool(
                 params["doc_type"] = f"%{document_type.strip()}%"
                 logger.info(f"[Tool rag_search] Filtro por tipo/nome: {document_type}")
 
+            # Filter by explicit filename
+            if filename and filename.strip():
+                base_where_clauses.append("d.filename ILIKE :filename_filter")
+                params["filename_filter"] = f"%{filename.strip()}%"
+                logger.info(f"[Tool rag_search] Filtro por filename: {filename}")
+
             # Helper to execute query
             async def execute_query(clauses, limit=10):
                 where_sql = " AND ".join(clauses)
@@ -124,8 +133,9 @@ def make_rag_search_tool(
             rows = await execute_query(strict_clauses)
             logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks (threshold: similaridade > {(1 - _MAX_DISTANCE):.0%})")
 
-            # 2. Fallback: Relaxed Search (if filtered by ID and no results)
-            if not rows and document_ids and document_ids.strip():
+            # 2. Fallback: Relaxed Search (if filtered by ID or filename and no results)
+            is_filtered = bool((document_ids and document_ids.strip()) or (filename and filename.strip()))
+            if not rows and is_filtered:
                 logger.info("[Tool rag_search] Fallback: Buscando sem threshold de similaridade nos documentos filtrados...")
                 rows = await execute_query(base_where_clauses, limit=5)
                 logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks no fallback")
@@ -133,10 +143,23 @@ def make_rag_search_tool(
             if not rows:
                 filter_desc = ""
                 if document_ids:
-                    filter_desc += f" nos documentos {document_ids}"
+                    filter_desc += f" nos IDs {document_ids}"
+                if filename:
+                    filter_desc += f" (arquivo '{filename}')"
                 if document_type:
                     filter_desc += f" do tipo '{document_type}'"
                 logger.info("[Tool rag_search] Nenhum chunk relevante encontrado")
+                
+                # ReAct Behavioral Guardrail: If they used document_ids and failed, it's 99% a hallucination.
+                if document_ids:
+                    return (
+                        f"Nenhum trecho encontrado{filter_desc}. "
+                        f"DICA OBRIGATÓRIA: Se você pegou esses IDs ('{document_ids}') de uma lista numerada do chat (1, 2, 3...), "
+                        f"VOCÊ ALUCINOU OS IDs! O número do item na lista não é o ID do banco. "
+                        f"FAÇA UMA NOVA CHAMADA para 'rag_search' AGORA, deixando 'document_ids' VAZIO e usando o parâmetro 'filename' "
+                        f"com o nome do arquivo que você quer resumir."
+                    )
+                
                 return f"Nenhum trecho relevante encontrado{filter_desc} nos documentos processados."
 
             # Step 3: Format results with context

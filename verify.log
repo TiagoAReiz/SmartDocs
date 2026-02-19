@@ -1,0 +1,133 @@
+2026-02-19 21:58:12.248 | INFO     | app.services.chat_service:chat:250 - ============================================================
+2026-02-19 21:58:12.248 | INFO     | app.services.chat_service:chat:251 - [Chat] Nova pergunta de user_id=2 (admin=True)
+2026-02-19 21:58:12.248 | INFO     | app.services.chat_service:chat:252 - [Chat] Pergunta: quais os prazos contratuais de todos contratos que temos no sistema
+2026-02-19 21:58:12.248 | INFO     | app.services.chat_service:chat:255 - ============================================================
+2026-02-19 21:58:12.248 | INFO     | app.services.chat_service:chat:259 - [Chat] Criando agente...
+2026-02-19 21:58:12.440 | INFO     | app.services.chat_service:_create_agent:188 - [Agent] Buscando schema do banco de dados...
+2026-02-19 21:58:12.491 | DEBUG    | app.services.chat_service:_create_agent:190 - [Agent] Schema carregado (783 chars)
+2026-02-19 21:58:12.497 | INFO     | app.services.chat_service:_create_agent:197 - [Agent] Ferramentas disponíveis: database_query, get_database_schema, rag_search
+2026-02-19 21:58:12.505 | INFO     | app.services.chat_service:chat:266 - [Chat] Agente criado. Invocando...
+2026-02-19 21:58:13.514 | INFO     | app.services.tools:database_query:147 - [Tool database_query] Gerando SQL para: Quais os prazos contratuais de todos os contratos no sistema?
+2026-02-19 21:58:14.965 | INFO     | app.services.tools:database_query:166 - [Tool database_query] SQL gerado: SELECT 
+    c.id AS contract_id,
+    c.client_name AS client_name,
+    c.start_date AS contract_start_date,
+    c.end_date AS contract_end_date,
+    c.status AS contract_status,
+    d.filename AS docu
+2026-02-19 21:58:14.971 | INFO     | app.services.sql_guard:validate_sql:80 - SQL validado: SELECT 
+    c.id AS contract_id,
+    c.client_name AS client_name,
+    c.start_date AS contract_start_date,
+    c.end_date AS contract_end_date,
+    c.status AS contract_status,
+    d.filename AS docu...
+2026-02-19 21:58:16.213 | INFO     | app.services.tools:database_query:147 - [Tool database_query] Gerando SQL para: Listar todos os contratos com seus prazos (start_date e end_date)
+2026-02-19 21:58:17.368 | INFO     | app.services.tools:database_query:166 - [Tool database_query] SQL gerado: SELECT 
+    c.id AS contract_id,
+    c.client_name AS client_name,
+    c.contract_value AS contract_value,
+    c.start_date AS start_date,
+    c.end_date AS end_date,
+    c.status AS contract_status,
+
+2026-02-19 21:58:17.372 | INFO     | app.services.sql_guard:validate_sql:80 - SQL validado: SELECT 
+    c.id AS contract_id,
+    c.client_name AS client_name,
+    c.contract_value AS contract_value,
+    c.start_date AS start_date,
+    c.end_date AS end_date,
+    c.status AS contract_status,
+...
+2026-02-19 21:58:17.900 | INFO     | app.services.rag_tool:rag_search:55 - [Tool rag_search] Query: prazos contratuais
+2026-02-19 21:58:17.900 | INFO     | app.services.rag_tool:rag_search:56 - [Tool rag_search] Filtros: document_ids=(todos), document_type=(todos), user_id=2, is_admin=True
+2026-02-19 21:58:17.901 | INFO     | app.services.rag_tool:rag_search:64 - [Tool rag_search] Gerando embedding da query...
+2026-02-19 21:58:17.905 | DEBUG    | app.services.embedding_service:generate_embeddings:53 - Gerando embeddings batch 1 (1 textos)
+2026-02-19 21:58:18.479 | INFO     | app.services.embedding_service:generate_embeddings:68 - Embeddings gerados: 1 vetores
+2026-02-19 21:58:18.479 | INFO     | app.services.rag_tool:rag_search:66 - [Tool rag_search] Embedding gerado (1536 dimensões)
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:125 - [Tool rag_search] Encontrados 10 chunks (threshold: similaridade > 35%)
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 1: doc=contrato_ficticio_document_intelligence.pdf similaridade=60% seção=texto_geral
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 2: doc=contrato_ficticio_document_intelligence.pdf similaridade=53% seção=texto_geral
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 3: doc=01_contrato_prestacao_servicos_ti.pdf similaridade=53% seção=cláusula
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 4: doc=01_contrato_prestacao_servicos_ti.pdf similaridade=52% seção=cláusula
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 5: doc=07_termo_confidencialidade_nda.pdf similaridade=49% seção=texto_geral
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 6: doc=contrato_ficticio_document_intelligence.pdf similaridade=48% seção=texto_geral
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 7: doc=contrato_ficticio_document_intelligence.pdf similaridade=46% seção=texto_geral
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 8: doc=01_contrato_prestacao_servicos_ti.pdf similaridade=45% seção=texto_geral
+2026-02-19 21:58:18.505 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 9: doc=contrato_ficticio_document_intelligence.pdf similaridade=45% seção=texto_geral
+2026-02-19 21:58:18.506 | INFO     | app.services.rag_tool:rag_search:160 - [Tool rag_search]   Chunk 10: doc=01_contrato_prestacao_servicos_ti.pdf similaridade=43% seção=cláusula
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:285 - [Chat] Processando 10 mensagens do agente...
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:293 - [Chat] Msg 0: 🧑 Human — quais os prazos contratuais de todos contratos que temos no sistema
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:303 - [Chat] Msg 1: 🤖 AI → chamando tool 'database_query' com args: {'question': 'Quais os prazos contratuais de todos os contratos no sistema?'}
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:315 - [Chat] Msg 2: 🔧 Tool 'database_query' retornou: A consulta não retornou resultados.
+SQL usado: SELECT 
+    c.id AS contract_id,
+    c.client_name AS client_name,
+    c.start_date AS contract_start_date,
+    c.end_date AS contract_end_date,
+    c.status AS contract_status,
+    d.filename AS document_filename,
+    d.type AS document_type
+FROM 
+    
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:303 - [Chat] Msg 3: 🤖 AI → chamando tool 'get_database_schema' com args: {}
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:315 - [Chat] Msg 4: 🔧 Tool 'get_database_schema' retornou: Tabelas disponíveis:
+
+- chat_threads (id, user_id, title, created_at, updated_at)
+- contracts (id, document_id, client_name, contract_value, start_date, end_date, status, created_at)
+- document_fields (id, document_id, field_key, field_value, confidence, page_number, bounding_box)
+- document_logs (i
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:303 - [Chat] Msg 5: 🤖 AI → chamando tool 'database_query' com args: {'question': 'Listar todos os contratos com seus prazos (start_date e end_date)'}
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:315 - [Chat] Msg 6: 🔧 Tool 'database_query' retornou: A consulta não retornou resultados.
+SQL usado: SELECT 
+    c.id AS contract_id,
+    c.client_name AS client_name,
+    c.contract_value AS contract_value,
+    c.start_date AS start_date,
+    c.end_date AS end_date,
+    c.status AS contract_status,
+    d.filename AS document_filename,
+    d.type AS do
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:303 - [Chat] Msg 7: 🤖 AI → chamando tool 'rag_search' com args: {'query': 'prazos contratuais'}
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:315 - [Chat] Msg 8: 🔧 Tool 'rag_search' retornou: Encontrados 10 trechos relevantes em 3 documento(s):
+[01_contrato_prestacao_servicos_ti.pdf (ID:112), 07_termo_confidencialidade_nda.pdf (ID:117), contrato_ficticio_document_intelligence.pdf (ID:111)]
+
+--- Trecho 1 (Documento: contrato_ficticio_document_intelligence.pdf [ID:111], Seção: texto_geral,
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:309 - [Chat] Msg 9: 🤖 AI — Os prazos contratuais encontrados nos documentos do sistema são:
+
+1. **Contrato de Prestação de Serviços de TI** (Documento: 01_contrato_prestacao_ser
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:339 - ────────────────────────────────────────────────────────────
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:340 - [Chat] ✅ Resumo da execução:
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:341 - [Chat]   Tools usados: ['database_query', 'get_database_schema', 'database_query', 'rag_search']
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:342 - [Chat]   SQL usado: sim
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:343 - [Chat]   Linhas SQL: 0
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:344 - [Chat]   Tamanho resposta: 686 chars
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:345 - [Chat]   Resposta (preview): Os prazos contratuais encontrados nos documentos do sistema são:
+
+1. **Contrato de Prestação de Serviços de TI** (Documento: 01_contrato_prestacao_servicos_ti.pdf):
+   - Vigência de 12 meses, iniciand
+2026-02-19 21:58:20.301 | INFO     | app.services.chat_service:chat:346 - ────────────────────────────────────────────────────────────
+Running test with user: tiagoreiz@laster.com
+Question: quais os prazos contratuais de todos contratos que temos no sistema
+
+--- Response ---
+Answer: Os prazos contratuais encontrados nos documentos do sistema são:
+
+1. **Contrato de Prestação de Serv...
+SQL Used: SELECT 
+    c.id AS contract_id,
+    c.client_name AS client_name,
+    c.contract_value AS contract_value,
+    c.start_date AS start_date,
+    c.end_date AS end_date,
+    c.status AS contract_status,
+    d.filename AS document_filename,
+    d.type AS document_type,
+    d.status AS document_status
+FROM 
+    contracts c
+JOIN 
+    documents d ON c.document_id = d.id
+LIMIT 100
+Row Count: 0
+❌ FAILURE: No data returned

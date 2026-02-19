@@ -22,7 +22,7 @@ async def main():
         print(f"Running test with user: {user.email}")
         
         # Test query that should return data
-        question = "Listar todos os documentos do sistema"
+        question = "quais os prazos contratuais de todos contratos que temos no sistema"
         
         print(f"Question: {question}")
         response = await chat_service.chat(

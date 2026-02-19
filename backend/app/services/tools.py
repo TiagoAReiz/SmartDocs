@@ -110,15 +110,21 @@ O sistema extrai dados de documentos via OCR e os armazena em múltiplas camadas
 10. Para consolidar múltiplos campos do MESMO documento:
     MAX(CASE WHEN df.field_key ILIKE '%chave%' THEN df.field_value END) AS alias
     com GROUP BY documents.id
-11. Para filtrar por data em document_fields.field_value (formato DD/MM/AAAA):
+11. PERGUNTAS ANALÍTICAS vs TEXTUAIS:
+    Se o usuário perguntar "quais os prazos dos contratos":
+    NÃO busque `extracted_text ILIKE '%prazo%'`.
+    SIM, busque os metadados corretos na tabela contracts: `SELECT client_name, start_date, end_date FROM contracts`.
+    Traduza a intenção do usuário para as colunas reais do banco.
+12. Filtrar por data em document_fields.field_value (formato DD/MM/AAAA):
     to_date(df.field_value, 'DD/MM/YYYY') — MAS SOMENTE após filtrar por field_key primeiro
-12. Para buscar dentro de JSON em document_tables:
+13. Para buscar dentro de JSON em document_tables:
     dt.headers::text ILIKE '%termo%' ou dt.rows::text ILIKE '%termo%'
 13. Nunca use SELECT *; selecione apenas colunas necessárias
 14. Use LIMIT razoável (máx 100 linhas)
 15. Para descobrir quais field_keys existem, use:
     SELECT DISTINCT field_key FROM document_fields ORDER BY field_key
 16. Para contar documentos por tipo/status, agrupe por documents.type ou documents.status
+17. ⚠️ IMPORTANTE: Se pedirem "contratos", "acordos" ou afins, E ELES NÃO ESTIVEREM NA TABELA `contracts`, eles ainda podem existir como arquivos normais! OBRIGATORIAMENTE busque na tabela `documents` usando `type ILIKE '%contrato%'` ou `filename ILIKE '%contrato%'`. Nunca diga que não há contratos sem antes fazer essa busca.
 """
 
 
@@ -140,9 +146,11 @@ def make_database_query_tool(
     @tool
     async def database_query(question: str) -> str:
         """Consulta o banco de dados PostgreSQL baseado em uma pergunta em linguagem natural.
-        Use esta ferramenta SEMPRE que o usuário perguntar sobre documentos, contratos,
-        campos extraídos, tabelas, ou qualquer dado armazenado no sistema.
-        NÃO use esta ferramenta para perguntas de saudação ou conversação geral."""
+        Use esta ferramenta SEMPRE E EXPRESSAMENTE para:
+        - Relatórios, contagens, agregações.
+        - Listar dados de múltiplos documentos (ex: 'listar todos os contratos', 'quais os prazos', 'quais clientes').
+        - Perguntas sobre metadados (valores, datas de início/fim, status, tipos de contrato).
+        NÃO use esta ferramenta para perguntas puramente textuais ou de interpretação de cláusulas de um único documento."""
 
         logger.info(f"[Tool database_query] Gerando SQL para: {question[:100]}")
 
@@ -214,7 +222,14 @@ def make_database_query_tool(
 
         # Step 4: Format results
         if row_count == 0:
-            return f"A consulta não retornou resultados.\nSQL usado: {validated_sql}"
+            return (
+                f"A consulta não retornou resultados.\nSQL usado: {validated_sql}\n"
+                f"DICA OBRIGATÓRIA PARA O AGENTE: Se você estava buscando contratos ou documentos específicos "
+                f"e usou as tabelas 'contracts' ou 'document_fields', VOCÊ DEVE fazer UMA NOVA CHAMADA "
+                f"agora mesmo para 'database_query', cruzando OBRIGATORIAMENTE a coluna 'filename'.\n"
+                f"Exemplo exigido: SELECT id, filename FROM documents WHERE type ILIKE '%contrato%' OR filename ILIKE '%contrato%'. "
+                f"NÃO DESISTA SEM ANTES BUSCAR PELO 'FILENAME'!"
+            )
 
         data = [dict(zip(columns, row)) for row in rows]
         results_text = "\n".join(
