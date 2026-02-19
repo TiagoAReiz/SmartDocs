@@ -6,7 +6,6 @@ import type {
     Document,
     DocumentDetail,
     PaginatedDocuments,
-    DocumentStatus,
 } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -32,8 +31,10 @@ import {
     Loader2,
     ChevronLeft,
     ChevronRight,
+    Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export default function DocumentsPage() {
     const [documents, setDocuments] = useState<Document[]>([]);
@@ -116,13 +117,11 @@ export default function DocumentsPage() {
 
     const handleDownload = async (doc: DocumentDetail) => {
         try {
-            // Use existing preview URL if available
             if (previewUrl && (doc.mime_type === "application/pdf" || doc.mime_type?.startsWith("image/"))) {
                 window.open(previewUrl, "_blank");
                 return;
             }
 
-            // Otherwise fetch blob with auth
             toast.loading("Baixando documento...");
             const response = await api.get(`/documents/${doc.id}/file`, {
                 responseType: "blob",
@@ -154,10 +153,11 @@ export default function DocumentsPage() {
     };
 
     const typeColors: Record<string, string> = {
-        contrato: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-        relatorio: "bg-purple-500/15 text-purple-400 border-purple-500/20",
-        nota_fiscal: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-        default: "bg-slate-500/15 text-slate-400 border-slate-500/20",
+        contrato: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+        relatorio: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+        nota_fiscal: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+        fatura: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+        default: "bg-slate-500/10 text-slate-400 border-slate-500/20",
     };
 
     const formatDate = (dateStr: string) => {
@@ -169,16 +169,16 @@ export default function DocumentsPage() {
     };
 
     return (
-        <div>
+        <div className="space-y-6">
             <PageHeader
                 title="Documentos"
                 subtitle={`${total} documento${total !== 1 ? "s" : ""} encontrado${total !== 1 ? "s" : ""}`}
             />
 
             {/* Filters */}
-            <Card className="mt-6 flex flex-wrap items-center gap-4 border-white/[0.06] bg-[#1E293B]/50 p-4">
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <div className="flex flex-col gap-4 rounded-xl border border-white/[0.08] bg-card/50 p-4 backdrop-blur-sm md:flex-row md:items-center">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         placeholder="Buscar por nome..."
                         value={searchInput}
@@ -186,7 +186,7 @@ export default function DocumentsPage() {
                             setSearchInput(e.target.value);
                             setPage(1);
                         }}
-                        className="h-10 border-white/[0.08] bg-white/[0.04] pl-10 text-slate-200 placeholder:text-slate-600"
+                        className="h-10 border-white/[0.08] bg-white/[0.04] pl-10 text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/20"
                     />
                 </div>
                 <Select
@@ -196,10 +196,10 @@ export default function DocumentsPage() {
                         setPage(1);
                     }}
                 >
-                    <SelectTrigger className="h-10 w-44 border-white/[0.08] bg-white/[0.04] text-slate-300">
+                    <SelectTrigger className="h-10 w-full md:w-48 border-white/[0.08] bg-white/[0.04] text-muted-foreground focus:ring-primary/20">
                         <SelectValue placeholder="Status" />
                     </SelectTrigger>
-                    <SelectContent className="border-white/[0.08] bg-[#1E293B]">
+                    <SelectContent className="border-white/[0.08] bg-popover text-popover-foreground">
                         <SelectItem value="all">Todos os status</SelectItem>
                         <SelectItem value="processed">Concluído</SelectItem>
                         <SelectItem value="processing">Processando</SelectItem>
@@ -207,257 +207,166 @@ export default function DocumentsPage() {
                         <SelectItem value="failed">Falhou</SelectItem>
                     </SelectContent>
                 </Select>
-            </Card>
-
-            {/* Documents table */}
-            <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.06]">
-                <div className="overflow-x-auto">
-                    <div className="min-w-[800px]">
-                        {/* Header */}
-                        <div className="grid grid-cols-[1fr_120px_120px_80px_100px_40px] gap-4 border-b border-white/[0.06] bg-[#1E293B]/80 px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500">
-                            <span>Nome</span>
-                            <span>Tipo</span>
-                            <span>Data Upload</span>
-                            <span>Páginas</span>
-                            <span>Status</span>
-                            <span />
-                        </div>
-
-                        {/* Loading state */}
-                        {loading && (
-                            <div className="space-y-0">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                    <div
-                                        key={i}
-                                        className="grid grid-cols-[1fr_120px_120px_80px_100px_40px] gap-4 border-b border-white/[0.04] px-4 py-4"
-                                    >
-                                        <Skeleton className="h-4 w-48" />
-                                        <Skeleton className="h-5 w-20" />
-                                        <Skeleton className="h-4 w-24" />
-                                        <Skeleton className="h-4 w-8" />
-                                        <Skeleton className="h-5 w-20" />
-                                        <Skeleton className="h-4 w-4" />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Rows */}
-                        {!loading &&
-                            documents.map((doc) => (
-                                <div key={doc.id}>
-                                    <div
-                                        onClick={() => handleExpand(doc.id)}
-                                        className="grid cursor-pointer grid-cols-[1fr_120px_120px_80px_100px_40px] items-center gap-4 border-b border-white/[0.04] px-4 py-4 transition-colors hover:bg-white/[0.02]"
-                                    >
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <FileText className="h-4 w-4 shrink-0 text-slate-500" />
-                                            <span className="truncate text-sm font-medium text-slate-200">
-                                                {doc.filename}
-                                            </span>
-                                        </div>
-                                        <Badge
-                                            variant="outline"
-                                            className={`text-xs ${typeColors[doc.type] || typeColors.default}`}
-                                        >
-                                            {doc.type}
-                                        </Badge>
-                                        <span className="text-sm text-slate-400">
-                                            {formatDate(doc.upload_date)}
-                                        </span>
-                                        <span className="text-sm text-slate-400">
-                                            {doc.page_count}
-                                        </span>
-                                        <StatusBadge status={doc.status} />
-                                        <div className="text-slate-500">
-                                            {expandedId === doc.id ? (
-                                                <ChevronUp className="h-4 w-4" />
-                                            ) : (
-                                                <ChevronDown className="h-4 w-4" />
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Expanded detail */}
-                                    {expandedId === doc.id && (
-                                        <div className="border-b border-white/[0.06] bg-[#0B1120]/50 p-6">
-                                            {detailLoading ? (
-                                                <div className="flex items-center justify-center py-8">
-                                                    <Loader2 className="h-6 w-6 animate-spin text-[#136dec]" />
-                                                </div>
-                                            ) : detail ? (
-                                                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                                                    {/* Document preview */}
-                                                    <div>
-                                                        <h4 className="mb-3 text-sm font-medium text-slate-300">
-                                                            Preview do Documento
-                                                        </h4>
-                                                        <div className="aspect-[4/3] overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                                                            {detail.mime_type === "application/pdf" ? (
-                                                                previewUrl ? (
-                                                                    <iframe
-                                                                        src={previewUrl}
-                                                                        className="h-full w-full"
-                                                                        title={detail.filename}
-                                                                    />
-                                                                ) : (
-                                                                    <div className="flex h-full items-center justify-center">
-                                                                        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-                                                                    </div>
-                                                                )
-                                                            ) : detail.mime_type?.startsWith("image/") ? (
-                                                                previewUrl ? (
-                                                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                                                    <img
-                                                                        src={previewUrl}
-                                                                        alt={detail.filename}
-                                                                        className="h-full w-full object-contain"
-                                                                    />
-                                                                ) : (
-                                                                    <div className="flex h-full items-center justify-center">
-                                                                        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-                                                                    </div>
-                                                                )
-                                                            ) : (
-                                                                <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                                                                    Preview não disponível para este tipo de arquivo
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="mt-3 flex gap-2">
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleDownload(detail)}
-                                                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
-                                                            >
-                                                                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                                                                Ver Documento Completo
-                                                            </Button>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleReprocess(detail.id)}
-                                                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
-                                                            >
-                                                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                                                                Reprocessar
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Extracted data */}
-                                                    <div>
-                                                        <h4 className="mb-3 text-sm font-medium text-slate-300">
-                                                            Dados Extraídos
-                                                        </h4>
-                                                        {/* Fields */}
-                                                        {detail.fields && detail.fields.length > 0 && (
-                                                            <div className="mb-4 space-y-2">
-                                                                {detail.fields.map((field, i) => (
-                                                                    <div
-                                                                        key={i}
-                                                                        className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2"
-                                                                    >
-                                                                        <span className="text-sm text-slate-400">
-                                                                            {field.field_key}
-                                                                        </span>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-sm font-medium text-slate-200">
-                                                                                {field.field_value}
-                                                                            </span>
-                                                                            <span className="text-xs text-slate-600">
-                                                                                {Math.round(field.confidence * 100)}%
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-
-                                                        {/* Tables */}
-                                                        {detail.tables &&
-                                                            detail.tables.map((table, tIdx) => (
-                                                                <div
-                                                                    key={tIdx}
-                                                                    className="mt-4 overflow-x-auto rounded-lg border border-white/[0.06]"
-                                                                >
-                                                                    <table className="w-full text-sm">
-                                                                        <thead>
-                                                                            <tr className="border-b border-white/[0.06] bg-white/[0.03]">
-                                                                                {table.headers.map((h, i) => (
-                                                                                    <th
-                                                                                        key={i}
-                                                                                        className="px-3 py-2 text-left text-xs font-medium text-slate-400"
-                                                                                    >
-                                                                                        {h}
-                                                                                    </th>
-                                                                                ))}
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody>
-                                                                            {table.rows.map((row, rIdx) => (
-                                                                                <tr
-                                                                                    key={rIdx}
-                                                                                    className="border-b border-white/[0.04] last:border-0"
-                                                                                >
-                                                                                    {row.map((cell, cIdx) => (
-                                                                                        <td
-                                                                                            key={cIdx}
-                                                                                            className="px-3 py-2 text-slate-300"
-                                                                                        >
-                                                                                            {cell}
-                                                                                        </td>
-                                                                                    ))}
-                                                                                </tr>
-                                                                            ))}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            ))}
-
-                                                        {detail.extracted_text?.trim() && (
-                                                            <details className="mt-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                                                                <summary className="cursor-pointer px-3 py-2 text-sm text-slate-300">
-                                                                    Texto extraído
-                                                                </summary>
-                                                                <pre className="max-h-[420px] overflow-auto px-3 pb-3 pt-2 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
-                                                                    {detail.extracted_text}
-                                                                </pre>
-                                                            </details>
-                                                        )}
-
-                                                        {detail.error_message && (
-                                                            <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
-                                                                {detail.error_message}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-
-                        {/* Empty state */}
-                        {!loading && documents.length === 0 && (
-                            <div className="py-12 text-center">
-                                <FileText className="mx-auto h-10 w-10 text-slate-600" />
-                                <p className="mt-3 text-sm text-slate-500">
-                                    Nenhum documento encontrado
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </div>
             </div>
 
-            {/* Pagination */}
-            {
-                totalPages > 1 && (
-                    <div className="mt-4 flex items-center justify-between">
-                        <span className="text-sm text-slate-500">
+            {/* Content Area */}
+            <div className="space-y-4">
+                {/* Mobile View (Cards) */}
+                <div className="grid gap-4 md:hidden">
+                    {loading
+                        ? Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="flex flex-col gap-3 rounded-xl border border-white/[0.08] bg-card p-4">
+                                <Skeleton className="h-4 w-3/4" />
+                                <div className="flex justify-between">
+                                    <Skeleton className="h-4 w-20" />
+                                    <Skeleton className="h-4 w-20" />
+                                </div>
+                            </div>
+                        ))
+                        : documents.map((doc) => (
+                            <div
+                                key={doc.id}
+                                className="flex flex-col rounded-xl border border-white/[0.08] bg-card p-4 shadow-sm transition-all active:scale-[0.99]"
+                                onClick={() => handleExpand(doc.id)}
+                            >
+                                <div className="mb-3 flex items-start justify-between">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                            <FileText className="h-5 w-5 text-primary" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="truncate font-medium text-foreground">
+                                                {doc.filename}
+                                            </h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatDate(doc.upload_date)} • {doc.page_count} pág
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <StatusBadge status={doc.status} />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <Badge
+                                        variant="outline"
+                                        className={`text-[10px] uppercase tracking-wider ${typeColors[doc.type] || typeColors.default}`}
+                                    >
+                                        {doc.type}
+                                    </Badge>
+                                    <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform", expandedId === doc.id && "rotate-180")} />
+                                </div>
+
+                                {/* Expanded Content Mobile */}
+                                {expandedId === doc.id && (
+                                    <div className="mt-4 border-t border-white/[0.08] pt-4" onClick={(e) => e.stopPropagation()}>
+                                        <ExpandedDocumentDetail
+                                            detail={detail}
+                                            loading={detailLoading}
+                                            previewUrl={previewUrl}
+                                            onDownload={() => detail && handleDownload(detail)}
+                                            onReprocess={() => detail && handleReprocess(detail.id)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden overflow-hidden rounded-xl border border-white/[0.08] bg-card/40 backdrop-blur-sm md:block">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+                                <tr>
+                                    <th className="px-6 py-4 font-medium">Nome</th>
+                                    <th className="px-6 py-4 font-medium">Tipo</th>
+                                    <th className="px-6 py-4 font-medium">Data</th>
+                                    <th className="px-6 py-4 font-medium">Pág.</th>
+                                    <th className="px-6 py-4 font-medium">Status</th>
+                                    <th className="px-6 py-4 font-medium"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.04]">
+                                {loading ? (
+                                    Array.from({ length: 5 }).map((_, i) => (
+                                        <tr key={i}>
+                                            <td className="px-6 py-4"><Skeleton className="h-4 w-48" /></td>
+                                            <td className="px-6 py-4"><Skeleton className="h-5 w-20" /></td>
+                                            <td className="px-6 py-4"><Skeleton className="h-4 w-24" /></td>
+                                            <td className="px-6 py-4"><Skeleton className="h-4 w-8" /></td>
+                                            <td className="px-6 py-4"><Skeleton className="h-5 w-20" /></td>
+                                            <td className="px-6 py-4"></td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    documents.map((doc) => (
+                                        <>
+                                            <tr
+                                                key={doc.id}
+                                                onClick={() => handleExpand(doc.id)}
+                                                className={cn(
+                                                    "cursor-pointer transition-colors hover:bg-muted/50",
+                                                    expandedId === doc.id && "bg-muted/30"
+                                                )}
+                                            >
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <FileText className="h-4 w-4 text-primary/70" />
+                                                        <span className="font-medium text-foreground">{doc.filename}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={`text-[10px] uppercase font-bold tracking-wider rounded-md border-0 ${typeColors[doc.type] || typeColors.default}`}
+                                                    >
+                                                        {doc.type}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-6 py-4 text-muted-foreground">{formatDate(doc.upload_date)}</td>
+                                                <td className="px-6 py-4 text-muted-foreground">{doc.page_count}</td>
+                                                <td className="px-6 py-4"><StatusBadge status={doc.status} /></td>
+                                                <td className="px-6 py-4 text-muted-foreground">
+                                                    <ChevronDown className={cn("h-4 w-4 transition-transform", expandedId === doc.id && "rotate-180")} />
+                                                </td>
+                                            </tr>
+                                            {expandedId === doc.id && (
+                                                <tr className="bg-muted/20">
+                                                    <td colSpan={6} className="p-0">
+                                                        <div className="border-t border-white/[0.04] p-6 shadow-inner">
+                                                            <ExpandedDocumentDetail
+                                                                detail={detail}
+                                                                loading={detailLoading}
+                                                                previewUrl={previewUrl}
+                                                                onDownload={() => detail && handleDownload(detail)}
+                                                                onReprocess={() => detail && handleReprocess(detail.id)}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {!loading && documents.length === 0 && (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] py-20 text-center">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                            <FileText className="h-8 w-8 text-muted-foreground/50" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-medium text-foreground">Nenhum documento encontrado</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">Tente ajustar seus filtros ou faça um novo upload.</p>
+                    </div>
+                )}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-white/[0.08] pt-4">
+                        <span className="text-sm text-muted-foreground">
                             Página {page} de {totalPages}
                         </span>
                         <div className="flex gap-2">
@@ -466,9 +375,9 @@ export default function DocumentsPage() {
                                 size="sm"
                                 disabled={page <= 1}
                                 onClick={() => setPage(page - 1)}
-                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
+                                className="h-8 border-white/[0.1] bg-transparent hover:bg-white/[0.04]"
                             >
-                                <ChevronLeft className="mr-1 h-4 w-4" />
+                                <ChevronLeft className="mr-1 h-3 w-3" />
                                 Anterior
                             </Button>
                             <Button
@@ -476,15 +385,150 @@ export default function DocumentsPage() {
                                 size="sm"
                                 disabled={page >= totalPages}
                                 onClick={() => setPage(page + 1)}
-                                className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
+                                className="h-8 border-white/[0.1] bg-transparent hover:bg-white/[0.04]"
                             >
                                 Próxima
-                                <ChevronRight className="ml-1 h-4 w-4" />
+                                <ChevronRight className="ml-1 h-3 w-3" />
                             </Button>
                         </div>
                     </div>
-                )
-            }
-        </div >
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Extracted Component for Detail View to avoid duplication
+function ExpandedDocumentDetail({
+    detail,
+    loading,
+    previewUrl,
+    onDownload,
+    onReprocess
+}: {
+    detail: DocumentDetail | null;
+    loading: boolean;
+    previewUrl: string | null;
+    onDownload: () => void;
+    onReprocess: () => void;
+}) {
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (!detail) return null;
+
+    return (
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            {/* Preview Section */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-foreground">Preview</h4>
+                    <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={onDownload} className="h-8 text-xs hover:bg-white/10">
+                            <Download className="mr-2 h-3 w-3" /> Baixar
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={onReprocess} className="h-8 text-xs hover:bg-white/10 text-primary">
+                            <RefreshCw className="mr-2 h-3 w-3" /> Reprocessar
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="aspect-[3/4] overflow-hidden rounded-lg border border-white/[0.08] bg-black/20">
+                    {detail.mime_type === "application/pdf" ? (
+                        previewUrl ? (
+                            <iframe src={previewUrl} className="h-full w-full" title="PDF Preview" />
+                        ) : (
+                            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                                <Loader2 className="h-6 w-6 animate-spin" />
+                                <span className="text-xs">Carregando preview...</span>
+                            </div>
+                        )
+                    ) : detail.mime_type?.startsWith("image/") ? (
+                        previewUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={previewUrl} alt="Preview" className="h-full w-full object-contain" />
+                        ) : (
+                            <div className="flex h-full items-center justify-center text-muted-foreground">
+                                <Loader2 className="h-6 w-6 animate-spin" />
+                            </div>
+                        )
+                    ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                            Preview não disponível
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Data Section */}
+            <div className="space-y-6">
+                <div>
+                    <h4 className="mb-3 text-sm font-semibold text-foreground">Dados Extraídos</h4>
+                    {detail.fields && detail.fields.length > 0 ? (
+                        <div className="grid gap-2">
+                            {detail.fields.map((field, i) => (
+                                <div key={i} className="flex items-center justify-between rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.04]">
+                                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{field.field_key}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-foreground">{field.field_value}</span>
+                                        {field.confidence < 0.8 && (
+                                            <span className="text-[10px] text-yellow-500/80" title="Confiança baixa">⚠️</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground italic">Nenhum campo estruturado encontrado.</p>
+                    )}
+                </div>
+
+                {detail.tables && detail.tables.length > 0 && (
+                    <div>
+                        <h4 className="mb-3 text-sm font-semibold text-foreground">Tabelas ({detail.tables.length})</h4>
+                        {detail.tables.map((table, tIdx) => (
+                            <div key={tIdx} className="mb-4 overflow-x-auto rounded-lg border border-white/[0.08]">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-white/[0.04]">
+                                        <tr>
+                                            {table.headers.map((h, i) => (
+                                                <th key={i} className="px-3 py-2 text-left font-medium text-muted-foreground">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/[0.04]">
+                                        {table.rows.map((row, rIdx) => (
+                                            <tr key={rIdx}>
+                                                {row.map((cell, cIdx) => (
+                                                    <td key={cIdx} className="px-3 py-2 text-foreground/80">{cell}</td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {detail.extracted_text && (
+                    <details className="group rounded-lg border border-white/[0.08] bg-white/[0.02]">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
+                            Ver Texto Bruto
+                        </summary>
+                        <div className="border-t border-white/[0.08] bg-black/20 px-4 py-3">
+                            <pre className="max-h-60 overflow-auto text-xs leading-relaxed text-muted-foreground/80 whitespace-pre-wrap font-mono">
+                                {detail.extracted_text}
+                            </pre>
+                        </div>
+                    </details>
+                )}
+            </div>
+        </div>
     );
 }

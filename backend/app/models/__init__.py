@@ -5,6 +5,7 @@ from app.models.contract import Contract
 from app.models.document_log import DocumentLog
 from app.models.chat_message import ChatMessage
 from app.models.document_chunk import DocumentChunk
+from app.models.chat_thread import ChatThread
 
 __all__ = [
     "Base",
@@ -16,5 +17,6 @@ __all__ = [
     "DocumentLog",
     "ChatMessage",
     "DocumentChunk",
+    "ChatThread",
 ]
 

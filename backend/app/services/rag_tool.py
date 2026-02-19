@@ -16,8 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.embedding_service import generate_single_embedding
 
 
-# Similarity threshold: discard chunks with cosine distance > 0.4 (similarity < 60%)
-_MAX_DISTANCE = 0.4
+# Similarity threshold: discard chunks with cosine distance > 0.65 (similarity < 35%)
+_MAX_DISTANCE = 0.65
 
 
 def make_rag_search_tool(
@@ -43,10 +43,9 @@ def make_rag_search_tool(
 
         Args:
             query: Pergunta ou termo de busca em linguagem natural.
-            document_ids: Opcional. IDs de documentos separados por vírgula
-                          para focar a busca (ex: "42,87,103").
-                          Use quando souber quais documentos são relevantes.
-            document_type: Opcional. Tipo de documento para filtrar
+            document_ids: Opcional. IDs de documentos (ex: "42,87").
+                          Aceita formatos "1,2", "[1, 2]" ou lista.
+            document_type: Opcional. Tipo de documento ou termo no nome do arquivo
                            (ex: "contrato", "relatorio").
 
         Returns:
@@ -84,19 +83,22 @@ def make_rag_search_tool(
             # Filter by document IDs
             if document_ids and document_ids.strip():
                 try:
-                    ids = [int(x.strip()) for x in document_ids.split(",") if x.strip()]
+                    # Cleanup input like "[1, 2]" or "1, 2"
+                    clean_ids = document_ids.replace("[", "").replace("]", "")
+                    ids = [int(x.strip()) for x in clean_ids.split(",") if x.strip()]
+                    
                     if ids:
                         placeholders = ",".join(str(i) for i in ids)
                         where_clauses.append(f"dc.document_id IN ({placeholders})")
                         logger.info(f"[Tool rag_search] Filtro por document_ids: {ids}")
                 except ValueError:
-                    logger.warning(f"[Tool rag_search] document_ids inválidos: {document_ids}")
+                    logger.warning(f"[Tool rag_search] document_ids inválidos: {document_ids} (ignorando filtro)")
 
-            # Filter by document type
+            # Filter by document type (checks type OR filename)
             if document_type and document_type.strip():
-                where_clauses.append("d.type ILIKE :doc_type")
+                where_clauses.append("(d.type ILIKE :doc_type OR d.filename ILIKE :doc_type)")
                 params["doc_type"] = f"%{document_type.strip()}%"
-                logger.info(f"[Tool rag_search] Filtro por tipo: {document_type}")
+                logger.info(f"[Tool rag_search] Filtro por tipo/nome: {document_type}")
 
             where_sql = " AND ".join(where_clauses)
 

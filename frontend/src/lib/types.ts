@@ -83,6 +83,7 @@ export interface ReprocessResponse {
 
 export interface ChatRequest {
   question: string;
+  thread_id?: string;
 }
 
 export interface ChatResponse {
@@ -90,6 +91,8 @@ export interface ChatResponse {
   sql_used: string;
   row_count: number;
   data: Record<string, unknown>[];
+  thread_id?: string;
+  sources?: Record<string, unknown>[];
 }
 
 export interface ChatHistoryMessage {
@@ -97,6 +100,13 @@ export interface ChatHistoryMessage {
   question: string;
   answer: string;
   created_at: string;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ChatHistory {

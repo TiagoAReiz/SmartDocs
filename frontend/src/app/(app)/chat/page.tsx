@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import api from "@/lib/api";
-import type { ChatResponse, ChatHistoryMessage } from "@/lib/types";
-import { PageHeader } from "@/components/page-header";
+import type { ChatResponse, ChatHistoryMessage, ChatThread } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Send, Loader2, Bot, User } from "lucide-react";
+import { Send, Bot, User, Menu, Sparkles, StopCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ChatSidebar } from "@/components/chat-sidebar";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 interface Message {
     id: string;
@@ -19,10 +20,21 @@ interface Message {
     timestamp: Date;
 }
 
+const THREADS_PER_PAGE = 20;
+
 export default function ChatPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+
+    // Thread state
+    const [threads, setThreads] = useState<ChatThread[]>([]);
+    const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
+    const [isThreadsLoading, setIsThreadsLoading] = useState(false);
+    const [threadSearchTerm, setThreadSearchTerm] = useState("");
+    const [threadPage, setThreadPage] = useState(0);
+    const [hasMoreThreads, setHasMoreThreads] = useState(true);
+
     const scrollViewportRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const shouldAutoScrollRef = useRef(true);
@@ -30,49 +42,115 @@ export default function ChatPage() {
     const inputRef = useRef<HTMLInputElement>(null);
 
     const scrollToBottom = () => {
-        bottomRef.current?.scrollIntoView({ block: "end" });
+        bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     };
 
     const handleScroll = () => {
         const el = scrollViewportRef.current;
         if (!el) return;
-        isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+        isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     };
 
     useEffect(() => {
-        if (shouldAutoScrollRef.current || isAtBottomRef.current || isLoading) {
+        if (shouldAutoScrollRef.current || isAtBottomRef.current) {
             scrollToBottom();
             shouldAutoScrollRef.current = false;
         }
     }, [messages.length, isLoading]);
 
-    // Load chat history on mount
-    useEffect(() => {
-        api
-            .get<{ messages: ChatHistoryMessage[] }>("/chat/history?limit=50")
-            .then((res) => {
-                const history: Message[] = [];
-                res.data.messages.forEach((msg) => {
-                    history.push({
-                        id: `q-${msg.id}`,
-                        role: "user",
-                        content: msg.question,
-                        timestamp: new Date(msg.created_at),
-                    });
-                    history.push({
-                        id: `a-${msg.id}`,
-                        role: "assistant",
-                        content: msg.answer,
-                        timestamp: new Date(msg.created_at),
-                    });
-                });
-                shouldAutoScrollRef.current = true;
-                setMessages(history);
-            })
-            .catch(() => {
-                // History endpoint is optional
+    const fetchThreads = useCallback(async (page: number, search: string) => {
+        setIsThreadsLoading(true);
+        try {
+            const params = new URLSearchParams({
+                limit: THREADS_PER_PAGE.toString(),
+                offset: (page * THREADS_PER_PAGE).toString(),
             });
+            if (search) {
+                params.append("search", search);
+            }
+
+            const res = await api.get<ChatThread[]>(`/chat/threads?${params.toString()}`);
+
+            setThreads((prev) => {
+                if (page === 0) return res.data;
+                // Avoid duplicates
+                const newThreads = res.data.filter(t => !prev.some(p => p.id === t.id));
+                return [...prev, ...newThreads];
+            });
+
+            setHasMoreThreads(res.data.length === THREADS_PER_PAGE);
+        } catch (error) {
+            console.error("Failed to fetch threads:", error);
+        } finally {
+            setIsThreadsLoading(false);
+        }
     }, []);
+
+    const handleThreadSearch = useCallback((term: string) => {
+        setThreadSearchTerm(term);
+        setThreadPage(0);
+        fetchThreads(0, term);
+    }, [fetchThreads]);
+
+    const handleLoadMoreThreads = useCallback(() => {
+        if (!hasMoreThreads || isThreadsLoading) return;
+        const nextPage = threadPage + 1;
+        setThreadPage(nextPage);
+        fetchThreads(nextPage, threadSearchTerm);
+    }, [hasMoreThreads, isThreadsLoading, threadPage, threadSearchTerm, fetchThreads]);
+
+    const handleSelectThread = async (threadId: string) => {
+        if (threadId === selectedThreadId) return;
+
+        setSelectedThreadId(threadId);
+        setIsLoading(true);
+        setMessages([]);
+
+        try {
+            const res = await api.get<{ messages: ChatHistoryMessage[] }>(`/chat/threads/${threadId}/messages`);
+            const history: Message[] = [];
+            res.data.messages.forEach((msg) => {
+                history.push({
+                    id: `q-${msg.id}`,
+                    role: "user",
+                    content: msg.question,
+                    timestamp: new Date(msg.created_at),
+                });
+                history.push({
+                    id: `a-${msg.id}`,
+                    role: "assistant",
+                    content: msg.answer,
+                    timestamp: new Date(msg.created_at),
+                });
+            });
+            setMessages(history);
+            shouldAutoScrollRef.current = true;
+        } catch (error) {
+            console.error("Failed to fetch thread messages:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleNewChat = () => {
+        setSelectedThreadId(undefined);
+        setMessages([]);
+        setTimeout(() => inputRef.current?.focus(), 100);
+    };
+
+    const handleDeleteThread = async (threadId: string) => {
+        if (!confirm("Tem certeza que deseja excluir esta conversa?")) return;
+
+        try {
+            await api.delete(`/chat/threads/${threadId}`);
+            setThreads((prev) => prev.filter((t) => t.id !== threadId));
+            if (selectedThreadId === threadId) {
+                handleNewChat();
+            }
+        } catch (error) {
+            console.error("Failed to delete thread:", error);
+        }
+    };
 
     const handleSend = async () => {
         const question = input.trim();
@@ -90,7 +168,11 @@ export default function ChatPage() {
         setIsLoading(true);
 
         try {
-            const res = await api.post<ChatResponse>("/chat", { question });
+            const res = await api.post<ChatResponse>("/chat", {
+                question,
+                thread_id: selectedThreadId
+            });
+
             const assistantMsg: Message = {
                 id: `assistant-${Date.now()}`,
                 role: "assistant",
@@ -99,6 +181,16 @@ export default function ChatPage() {
                 timestamp: new Date(),
             };
             setMessages((prev) => [...prev, assistantMsg]);
+
+            if (!selectedThreadId && res.data.thread_id) {
+                setSelectedThreadId(res.data.thread_id);
+                // Refresh threads to show new one at top
+                fetchThreads(0, threadSearchTerm);
+            } else if (selectedThreadId) {
+                // Ideally move to top, but refreshing list is safer
+                fetchThreads(0, threadSearchTerm);
+            }
+
         } catch {
             const errorMsg: Message = {
                 id: `error-${Date.now()}`,
@@ -109,10 +201,9 @@ export default function ChatPage() {
             setMessages((prev) => [...prev, errorMsg]);
         } finally {
             setIsLoading(false);
-            inputRef.current?.focus();
+            setTimeout(() => inputRef.current?.focus(), 100);
         }
     };
-
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -121,153 +212,219 @@ export default function ChatPage() {
         }
     };
 
-    return (
-        <div className="flex h-[calc(100dvh-3rem)] min-h-0 flex-col lg:h-[calc(100vh-4rem)]">
-            <PageHeader
-                title="Chat"
-                subtitle="Converse com seus documentos em linguagem natural"
-            />
+    const suggestionChips = [
+        "Extrair dados da última fatura",
+        "Resumir contratos recentes",
+        "Quais documentos vencem hoje?",
+        "Analisar cláusulas de rescisão",
+    ];
 
-            {/* Messages area */}
-            <Card className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden border-white/[0.06] bg-[#0B1120]">
+    return (
+        <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background">
+            {/* Sidebar Desktop */}
+            <div className="hidden lg:block h-full border-r border-white/[0.08]">
+                <ChatSidebar
+                    threads={threads}
+                    selectedThreadId={selectedThreadId}
+                    onSelectThread={handleSelectThread}
+                    onNewChat={handleNewChat}
+                    onDeleteThread={handleDeleteThread}
+                    isLoading={isThreadsLoading}
+                    onSearch={handleThreadSearch}
+                    onLoadMore={handleLoadMoreThreads}
+                    hasMore={hasMoreThreads}
+                />
+            </div>
+
+            {/* Main Chat Area */}
+            <div className="flex flex-1 flex-col min-w-0 relative">
+                {/* Mobile Header with Sidebar Toggle */}
+                <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/[0.08] bg-card/80 backdrop-blur-md sticky top-0 z-10">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
+                                <Menu className="h-5 w-5" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="p-0 border-r border-white/[0.08] w-80 bg-card">
+                            <ChatSidebar
+                                threads={threads}
+                                selectedThreadId={selectedThreadId}
+                                onSelectThread={(id) => {
+                                    handleSelectThread(id);
+                                }}
+                                onNewChat={handleNewChat}
+                                onDeleteThread={handleDeleteThread}
+                                isLoading={isThreadsLoading}
+                                onSearch={handleThreadSearch}
+                                onLoadMore={handleLoadMoreThreads}
+                                hasMore={hasMoreThreads}
+                            />
+                        </SheetContent>
+                    </Sheet>
+                    <span className="font-semibold text-white">Chat</span>
+                    <Button variant="ghost" size="icon" onClick={handleNewChat}>
+                        <Sparkles className="h-4 w-4 text-primary" />
+                    </Button>
+                </div>
+
+                {/* Messages Container */}
                 <div
                     ref={scrollViewportRef}
                     onScroll={handleScroll}
-                    className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2 lg:p-6"
+                    className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth"
                 >
-                    {messages.length === 0 && !isLoading && (
-                        <div className="flex h-full flex-col items-center justify-center py-20 text-center">
-                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#136dec]/10">
-                                <Bot className="h-8 w-8 text-[#136dec]" />
+                    <div className="mx-auto max-w-3xl space-y-8 pb-32">
+                        {messages.length === 0 && !isLoading ? (
+                            <div className="flex min-h-[50vh] flex-col items-center justify-center text-center animate-in fade-in duration-500">
+                                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-purple-500/20 shadow-lg shadow-primary/10 ring-1 ring-white/10">
+                                    <Sparkles className="h-8 w-8 text-primary" />
+                                </div>
+                                <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                                    Como posso ajudar hoje?
+                                </h3>
+                                <div className="mt-8 grid w-full max-w-lg grid-cols-1 gap-3 sm:grid-cols-2">
+                                    {suggestionChips.map((chip) => (
+                                        <button
+                                            key={chip}
+                                            onClick={() => {
+                                                setInput(chip);
+                                                inputRef.current?.focus();
+                                            }}
+                                            className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-foreground text-left"
+                                        >
+                                            {chip}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <h3 className="text-lg font-medium text-slate-300">
-                                Olá! Como posso ajudar?
-                            </h3>
-                            <p className="mt-2 max-w-md text-sm text-slate-500">
-                                Faça perguntas sobre seus documentos em linguagem natural.
-                                Por exemplo: &quot;Quais contratos vencem nos próximos 30 dias?&quot;
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="space-y-4">
-                        {messages.map((msg) => (
-                            <div
-                                key={msg.id}
-                                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                            >
+                        ) : (
+                            messages.map((msg) => (
                                 <div
-                                    className={`flex max-w-[80%] gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+                                    key={msg.id}
+                                    className={cn(
+                                        "flex w-full gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300",
+                                        msg.role === "user" ? "justify-end pl-12" : "justify-start pr-12"
+                                    )}
                                 >
-                                    <div
-                                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${msg.role === "user"
-                                            ? "bg-[#136dec]"
-                                            : "bg-slate-700"
-                                            }`}
-                                    >
-                                        {msg.role === "user" ? (
-                                            <User className="h-4 w-4 text-white" />
-                                        ) : (
-                                            <Bot className="h-4 w-4 text-slate-300" />
-                                        )}
-                                    </div>
-                                    <div
-                                        className={`rounded-2xl px-4 py-3 ${msg.role === "user"
-                                            ? "bg-[#136dec] text-white"
-                                            : "bg-[#1E293B] text-slate-200"
-                                            }`}
-                                    >
-                                        <div className="prose prose-invert prose-sm max-w-none [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-white/10 [&_th]:bg-white/5 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-medium [&_th]:text-slate-300 [&_td]:border [&_td]:border-white/10 [&_td]:px-3 [&_td]:py-2 [&_td]:text-sm [&_td]:text-slate-400">
+                                    {msg.role === "assistant" && (
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-card border border-white/10 shadow-sm mt-1">
+                                            <Bot className="h-4 w-4 text-primary" />
+                                        </div>
+                                    )}
+
+                                    <div className={cn(
+                                        "relative px-5 py-3.5 shadow-sm max-w-full overflow-hidden",
+                                        msg.role === "user"
+                                            ? "rounded-2xl rounded-tr-sm bg-primary text-primary-foreground"
+                                            : "rounded-2xl rounded-tl-sm bg-card border border-white/[0.08] text-card-foreground"
+                                    )}>
+                                        <div className="prose prose-invert prose-sm max-w-none break-words [&_pre]:bg-black/30 [&_pre]:border [&_pre]:border-white/10">
                                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                                 {msg.content}
                                             </ReactMarkdown>
                                         </div>
-                                        {/* Render data table if present */}
+
+                                        {/* Data Table */}
                                         {msg.data && msg.data.length > 0 && (
-                                            <div className="mt-3 overflow-x-auto rounded-lg border border-white/[0.06]">
-                                                <table className="w-full text-sm">
-                                                    <thead>
-                                                        <tr className="border-b border-white/[0.06] bg-white/[0.03]">
-                                                            {Object.keys(msg.data[0]).map((key) => (
-                                                                <th
-                                                                    key={key}
-                                                                    className="px-3 py-2 text-left text-xs font-medium text-slate-400"
-                                                                >
-                                                                    {key}
-                                                                </th>
-                                                            ))}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {msg.data.map((row, i) => (
-                                                            <tr
-                                                                key={i}
-                                                                className="border-b border-white/[0.04] last:border-0"
-                                                            >
-                                                                {Object.values(row).map((val, j) => (
-                                                                    <td
-                                                                        key={j}
-                                                                        className="px-3 py-2 text-slate-300"
-                                                                    >
-                                                                        {String(val)}
-                                                                    </td>
+                                            <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.08] bg-black/20">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left text-xs">
+                                                        <thead className="bg-white/5 text-muted-foreground">
+                                                            <tr>
+                                                                {Object.keys(msg.data[0]).map((key) => (
+                                                                    <th key={key} className="px-4 py-2 font-medium uppercase tracking-wider whitespace-nowrap">
+                                                                        {key}
+                                                                    </th>
                                                                 ))}
                                                             </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-white/5">
+                                                            {msg.data.map((row, i) => (
+                                                                <tr key={i} className="hover:bg-white/5 transition-colors">
+                                                                    {Object.values(row).map((val, j) => (
+                                                                        <td key={j} className="px-4 py-2 whitespace-nowrap text-foreground/80">
+                                                                            {String(val)}
+                                                                        </td>
+                                                                    ))}
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
                                         )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
 
-                        {/* Typing indicator */}
-                        {isLoading && (
-                            <div className="flex justify-start">
-                                <div className="flex gap-3">
-                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700">
-                                        <Bot className="h-4 w-4 text-slate-300" />
+                                        <span className={cn(
+                                            "absolute bottom-1 right-3 text-[10px] opacity-50",
+                                            msg.role === "user" ? "text-primary-foreground" : "text-muted-foreground"
+                                        )}>
+                                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
                                     </div>
-                                    <div className="flex items-center gap-1.5 rounded-2xl bg-[#1E293B] px-4 py-3">
-                                        <div className="h-2 w-2 animate-bounce rounded-full bg-slate-500 [animation-delay:0ms]" />
-                                        <div className="h-2 w-2 animate-bounce rounded-full bg-slate-500 [animation-delay:150ms]" />
-                                        <div className="h-2 w-2 animate-bounce rounded-full bg-slate-500 [animation-delay:300ms]" />
+
+                                    {msg.role === "user" && (
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 border border-primary/20 shadow-sm mt-1">
+                                            <User className="h-4 w-4 text-primary" />
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
+
+                        {isLoading && (
+                            <div className="flex justify-start gap-4 pr-12 animate-in fade-in">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-card border border-white/10 mt-1">
+                                    <Bot className="h-4 w-4 text-primary" />
+                                </div>
+                                <div className="rounded-2xl rounded-tl-sm bg-card border border-white/[0.08] px-5 py-4">
+                                    <div className="flex gap-1.5">
+                                        <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:-0.3s]" />
+                                        <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:-0.15s]" />
+                                        <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50" />
                                     </div>
                                 </div>
                             </div>
                         )}
+                        <div ref={bottomRef} className="h-4" />
                     </div>
-                    <div ref={bottomRef} />
                 </div>
 
-                {/* Input bar */}
-                <div className="sticky bottom-0 border-t border-white/[0.06] bg-[#0B1120] p-4">
-                    <div className="flex gap-3">
-                        <Input
-                            ref={inputRef}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Pergunte algo sobre seus documentos..."
-                            className="h-11 flex-1 border-white/[0.08] bg-white/[0.04] text-slate-200 placeholder:text-slate-600 focus:border-[#136dec]/50"
-                            disabled={isLoading}
-                        />
-                        <Button
-                            onClick={handleSend}
-                            disabled={isLoading || !input.trim()}
-                            className="h-11 w-11 bg-[#136dec] p-0 text-white shadow-lg shadow-[#136dec]/20 transition-all hover:bg-[#1178ff] disabled:opacity-40"
-                        >
-                            {isLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Send className="h-4 w-4" />
-                            )}
-                        </Button>
+                {/* Input Area */}
+                <div className="absolute bottom-0 left-0 right-0 bg-transparent p-4 lg:p-6 bg-gradient-to-t from-background via-background to-transparent pt-10">
+                    <div className="mx-auto max-w-3xl">
+                        <div className="relative flex items-end gap-2 rounded-2xl bg-card/80 p-2 shadow-2xl backdrop-blur-xl border border-white/[0.08] ring-1 ring-white/[0.05] focus-within:ring-primary/30 transition-shadow hover:shadow-primary/5">
+                            <Input
+                                ref={inputRef}
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Pergunte algo..."
+                                className="min-h-[44px] flex-1 border-0 bg-transparent px-2 py-3 text-base shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/50 sm:text-sm"
+                                disabled={isLoading}
+                                autoComplete="off"
+                            />
+
+                            <Button
+                                onClick={handleSend}
+                                disabled={!input.trim() || isLoading}
+                                size="icon"
+                                className={cn(
+                                    "h-10 w-10 shrink-0 rounded-xl transition-all duration-300",
+                                    input.trim()
+                                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:scale-105 active:scale-95"
+                                        : "bg-muted text-muted-foreground opacity-50"
+                                )}
+                            >
+                                {isLoading ? <StopCircle className="h-5 w-5 animate-pulse" /> : <Send className="h-5 w-5 ml-0.5" />}
+                            </Button>
+                        </div>
+                        <p className="mt-2 text-center text-[10px] text-muted-foreground/40">
+                            IA generativa pode cometer erros. Verifique informações importantes.
+                        </p>
                     </div>
                 </div>
-            </Card>
+            </div>
         </div>
     );
 }

@@ -7,13 +7,17 @@ versus responding directly (e.g. greetings, general questions).
 
 import json
 from typing import Any, AsyncIterator
+from uuid import UUID
 
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.chat_message import ChatMessage
 from app.services.tools import make_database_query_tool, make_get_schema_tool, _fetch_db_schema
 from app.services.rag_tool import make_rag_search_tool
 
@@ -110,27 +114,31 @@ SELECT DISTINCT d.id, d.filename FROM documents d
      OR d.filename ILIKE '%termo%'
 ```
 
-## Estratégia de busca em 2 ETAPAS
+## Protocolo de BUSCA (ATUALIZADO)
 
-### Quando menciona CLIENTE, EMPRESA ou DOCUMENTO ESPECÍFICO:
+### 1. CASCATA SQL (Prioridade para Metadados)
+Tente encontrar `document_ids` usando a estratégia de cascata (contracts -> document_fields -> documents).
 
-**ETAPA 1** — Encontre document_ids usando a CASCATA acima (tente todas as tabelas!)
-**ETAPA 2** — Use `rag_search` com os IDs: rag_search(query="pergunta", document_ids="42,87")
+### 2. REGRA DE FALLBACK (OBRIGATÓRIO)
 
-### Quando a pergunta é GENÉRICA:
-- Use `rag_search` sem filtros ou com document_type
+Se a busca SQL filtrada retornar VAZIO (0 resultados):
+1. **NÃO DESISTA**.
+2. **TENTE RAG GLOBAL**: Execute `rag_search(query=query, document_ids="")`.
+   - Motivo: O SQL busca apenas metadados exatos. O RAG busca no CONTEÚDO do documento.
+   - Exemplo: Se SQL não achar "email" nos metadados, o RAG pode achar "email" dentro do texto do PDF.
+   - Mesmo que a pergunta mencione "da empresa X", se o SQL não achar, busque a informação globalmente.
+
+### 3. DECISÃO DE RAG
+- **Com IDs (do SQL):** Use `rag_search(query="...", document_ids="1,2,3")`.
+- **Sem IDs:** Use `rag_search(query="...")` (Global).
+
+### 4. IMPORTANTE SOBRE FILTROS
+- `document_ids`: Só use se tiver CERTEZA (vinda do SQL).
+- **Nunca** responda "Não encontrei" baseando-se APENAS no `database_query` se você não tentou `rag_search` global.
+- **REGRA DE OURO:** Se uma busca filtrada falhar (seja SQL ou RAG), **SEMPRE** faça uma busca **GLOBAL** (sem filtros) antes de dizer que não encontrou.
+- **Nunca** responda "Não encontrei" sem ter tentado um `rag_search` sem `document_ids`.
 
 ### Use `database_query` sozinho para dados numéricos/estruturados.
-```
-
-**ETAPA 2** — Use `rag_search` com os document_ids encontrados:
-→ rag_search(query="pergunta do usuário", document_ids="42,87")
-
-### Quando a pergunta é GENÉRICA:
-- Use `rag_search` sem filtros
-- Ou filtre por tipo: rag_search(query="...", document_type="contrato")
-
-### Use `database_query` sozinho quando precisa APENAS de dados numéricos/estruturados.
 
 ## Regras de resposta
 
@@ -142,7 +150,6 @@ SELECT DISTINCT d.id, d.filename FROM documents d
 6. Formate: R$ X.XXX,XX para valores e DD/MM/AAAA para datas
 7. Cite de qual documento (nome e ID) veio a informação
 """
-
 
 
 def _openai_ready() -> bool:
@@ -196,11 +203,38 @@ async def _create_agent(
     return agent
 
 
+async def _get_thread_history(db: AsyncSession, thread_id: str | None) -> list[Any]:
+    """Retrieve chat history for a given thread, formatted for LangChain."""
+    if not thread_id:
+        return []
+
+    try:
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.thread_id == UUID(thread_id))
+            .order_by(ChatMessage.created_at.asc())
+        )
+        result = await db.execute(stmt)
+        messages = result.scalars().all()
+
+        history = []
+        for msg in messages:
+            history.append(HumanMessage(content=msg.question))
+            history.append(AIMessage(content=msg.answer))
+
+        logger.info(f"[Chat] Histórico carregado: {len(messages)} pares de mensagens da thread {thread_id}")
+        return history
+    except Exception as e:
+        logger.error(f"[Chat] Erro ao carregar histórico da thread {thread_id}: {e}")
+        return []
+
+
 async def chat(
     question: str,
     user_id: int,
     is_admin: bool,
     db: AsyncSession,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Full agent-based chat pipeline.
@@ -214,6 +248,8 @@ async def chat(
     logger.info(f"{'='*60}")
     logger.info(f"[Chat] Nova pergunta de user_id={user_id} (admin={is_admin})")
     logger.info(f"[Chat] Pergunta: {question[:200]}")
+    if thread_id:
+        logger.info(f"[Chat] Thread ID: {thread_id}")
     logger.info(f"{'='*60}")
 
     try:
@@ -221,8 +257,14 @@ async def chat(
         agent = await _create_agent(db, user_id, is_admin)
         logger.info("[Chat] Agente criado. Invocando...")
 
+        # Load history if thread_id is provided
+        history = await _get_thread_history(db, thread_id)
+        
+        # Combine history with current question
+        input_messages = history + [HumanMessage(content=question)]
+
         result = await agent.ainvoke(
-            {"messages": [("user", question)]},
+            {"messages": input_messages},
         )
 
         # Extract the final answer from the agent's messages
@@ -239,7 +281,9 @@ async def chat(
             msg_type = getattr(msg, "type", "unknown")
 
             if msg_type == "human":
-                logger.info(f"[Chat] Msg {i}: 🧑 Human — {str(msg.content)[:100]}")
+                # Only log the current question, not the whole history re-logged
+                if str(msg.content) == question:
+                    logger.info(f"[Chat] Msg {i}: 🧑 Human — {str(msg.content)[:100]}")
 
             elif msg_type == "ai":
                 # AI message — could be a reasoning step or final answer
@@ -333,6 +377,7 @@ async def chat_stream(
     user_id: int,
     is_admin: bool,
     db: AsyncSession,
+    thread_id: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """
     Streaming chat using SSE.
@@ -344,6 +389,8 @@ async def chat_stream(
         - {"type": "done", "answer": "...", "sql_used": ..., "row_count": ...} at the end
     """
     logger.info(f"Chat stream: pergunta de user_id={user_id}: {question[:100]}")
+    if thread_id:
+        logger.info(f"Chat stream: thread_id={thread_id}")
 
     try:
         agent = await _create_agent(db, user_id, is_admin)
@@ -352,8 +399,12 @@ async def chat_stream(
         sql_used = None
         row_count = 0
 
+        # Load history if thread_id is provided
+        history = await _get_thread_history(db, thread_id)
+        input_messages = history + [HumanMessage(content=question)]
+
         async for event in agent.astream_events(
-            {"messages": [("user", question)]},
+            {"messages": input_messages},
             version="v2",
         ):
             kind = event.get("event", "")

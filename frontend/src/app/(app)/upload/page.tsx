@@ -16,9 +16,14 @@ import {
     RefreshCw,
     Loader2,
     File,
+    FileText,
+    Image as ImageIcon,
+    FileSpreadsheet,
+    FileWarning
 } from "lucide-react";
 import { toast } from "sonner";
 import type { DocumentStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface UploadItem {
     id: string;
@@ -93,7 +98,6 @@ export default function UploadPage() {
 
                 clearInterval(progressInterval);
 
-                // Update items with response data
                 setUploads((prev) =>
                     prev.map((item) => {
                         const newItem = newItems.find((n) => n.id === item.id);
@@ -164,36 +168,32 @@ export default function UploadPage() {
         return `${(bytes / 1048576).toFixed(1)} MB`;
     };
 
-    const statusIcon = (status: DocumentStatus) => {
-        switch (status) {
-            case "processed":
-                return <CheckCircle2 className="h-5 w-5 text-emerald-400" />;
-            case "processing":
-                return <Loader2 className="h-5 w-5 animate-spin text-amber-400" />;
-            case "failed":
-                return <XCircle className="h-5 w-5 text-red-400" />;
-            default:
-                return <FileUp className="h-5 w-5 text-slate-400" />;
-        }
+    const getFileIcon = (filename: string) => {
+        const ext = filename.split(".").pop()?.toLowerCase();
+        if (["pdf"].includes(ext || "")) return <FileText className="h-6 w-6 text-red-400" />;
+        if (["xls", "xlsx", "csv"].includes(ext || "")) return <FileSpreadsheet className="h-6 w-6 text-emerald-400" />;
+        if (["jpg", "jpeg", "png"].includes(ext || "")) return <ImageIcon className="h-6 w-6 text-purple-400" />;
+        return <File className="h-6 w-6 text-primary" />;
     };
 
     return (
-        <div>
+        <div className="space-y-6">
             <PageHeader
-                title="Upload de Documentos"
-                subtitle="Envie documentos para extração inteligente de dados"
+                title="Upload"
+                subtitle="Envie seus documentos para análise"
             />
 
-            {/* Dropzone */}
-            <Card
+            <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`mt-6 flex cursor-pointer flex-col items-center justify-center border-2 border-dashed p-6 md:p-12 transition-all duration-200 ${isDragging
-                    ? "border-[#136dec] bg-[#136dec]/5"
-                    : "border-white/[0.1] bg-[#1E293B]/50 hover:border-white/20 hover:bg-[#1E293B]/70"
-                    }`}
+                className={cn(
+                    "relative flex cursor-pointer flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed p-12 transition-all duration-300 md:p-20",
+                    isDragging
+                        ? "border-primary bg-primary/10 scale-[1.01]"
+                        : "border-white/10 bg-card/30 hover:border-primary/50 hover:bg-card/50"
+                )}
             >
                 <input
                     ref={fileInputRef}
@@ -203,73 +203,98 @@ export default function UploadPage() {
                     onChange={(e) => e.target.files && handleFiles(e.target.files)}
                     className="hidden"
                 />
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#136dec]/10">
-                    <CloudUpload className="h-8 w-8 text-[#136dec]" />
+
+                <div className={cn(
+                    "flex h-20 w-20 items-center justify-center rounded-full bg-white/5 shadow-inner transition-transform duration-500",
+                    isDragging ? "scale-110" : ""
+                )}>
+                    {isDragging ? (
+                        <CloudUpload className="h-10 w-10 text-primary animate-bounce" />
+                    ) : (
+                        <FileUp className="h-10 w-10 text-muted-foreground" />
+                    )}
                 </div>
-                <h3 className="text-lg font-medium text-slate-200">
-                    {isDragging ? "Solte os arquivos aqui" : "Arraste arquivos ou clique para selecionar"}
-                </h3>
-                <p className="mt-2 text-sm text-slate-500">
-                    Formatos aceitos: PDF, DOCX, XLSX, PPTX, JPG, PNG
-                </p>
-            </Card>
+
+                <div className="text-center space-y-2">
+                    <h3 className="text-xl font-medium text-foreground">
+                        {isDragging ? "Solte para enviar" : "Arraste e solte seus arquivos"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                        Ou clique para selecionar do computador
+                    </p>
+                </div>
+
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    {["PDF", "DOCX", "XLSX", "JPG", "PNG"].map((type) => (
+                        <span key={type} className="rounded-md bg-white/5 px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                            {type}
+                        </span>
+                    ))}
+                </div>
+            </div>
 
             {/* Upload list */}
             {uploads.length > 0 && (
-                <div className="mt-8">
-                    <h2 className="mb-4 text-lg font-medium text-slate-200">
-                        Uploads Recentes
-                    </h2>
-                    <div className="space-y-3">
+                <div className="space-y-4 animate-in slide-in-from-bottom-4 fade-in duration-500">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+                            Fila de Upload ({uploads.length})
+                        </h2>
+                        {isUploading && (
+                            <div className="flex items-center gap-2 text-xs text-primary animate-pulse">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Processando...
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid gap-3">
                         {uploads.map((item) => (
-                            <Card
+                            <div
                                 key={item.id}
-                                className="flex items-center gap-4 border-white/[0.06] bg-[#1E293B]/60 p-4"
+                                className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-card p-4 transition-all hover:bg-card/80"
                             >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.04]">
-                                    <File className="h-5 w-5 text-slate-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-3">
-                                        <p className="truncate text-sm font-medium text-slate-200">
-                                            {item.file.name}
-                                        </p>
-                                        <span className="shrink-0 text-xs text-slate-500">
-                                            {formatSize(item.file.size)}
-                                        </span>
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/[0.03]">
+                                        {getFileIcon(item.file.name)}
                                     </div>
-                                    {item.progress < 100 && (
-                                        <Progress
-                                            value={item.progress}
-                                            className="mt-2 h-1.5 bg-white/[0.06] [&>div]:bg-[#136dec]"
-                                        />
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <StatusBadge status={item.status} />
-                                    {statusIcon(item.status)}
-                                    {item.status === "failed" && item.documentId && (
+
+                                    <div className="flex-1 min-w-0 space-y-3">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <p className="truncate font-medium text-foreground">
+                                                    {item.file.name}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {formatSize(item.file.size)}
+                                                </p>
+                                            </div>
+                                            <StatusBadge status={item.status} />
+                                        </div>
+
+                                        <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                                            <div
+                                                className="absolute inset-y-0 left-0 bg-primary transition-all duration-300"
+                                                style={{ width: `${item.progress}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {item.status === "failed" && (
                                         <Button
                                             variant="ghost"
-                                            size="sm"
+                                            size="icon"
                                             onClick={() => handleReprocess(item)}
-                                            className="text-slate-400 hover:text-[#136dec]"
+                                            className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                            title="Tentar novamente"
                                         >
-                                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                                            Reprocessar
+                                            <RefreshCw className="h-4 w-4" />
                                         </Button>
                                     )}
                                 </div>
-                            </Card>
+                            </div>
                         ))}
                     </div>
-                </div>
-            )}
-
-            {isUploading && (
-                <div className="mt-4 flex items-center gap-2 text-sm text-slate-400">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Enviando arquivos...
                 </div>
             )}
         </div>
