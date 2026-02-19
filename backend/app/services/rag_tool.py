@@ -69,15 +69,12 @@ def make_rag_search_tool(
             embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
             # Build WHERE clauses dynamically
-            where_clauses = [
-                "d.status = 'processed'",
-                f"(dc.embedding <=> :embedding) < {_MAX_DISTANCE}",
-            ]
+            base_where_clauses = ["d.status = 'processed'"]
             params: dict[str, Any] = {"embedding": embedding_str}
 
             # Filter by user (non-admin)
             if not is_admin:
-                where_clauses.append("d.user_id = :user_id")
+                base_where_clauses.append("d.user_id = :user_id")
                 params["user_id"] = user_id
 
             # Filter by document IDs
@@ -89,40 +86,49 @@ def make_rag_search_tool(
                     
                     if ids:
                         placeholders = ",".join(str(i) for i in ids)
-                        where_clauses.append(f"dc.document_id IN ({placeholders})")
+                        base_where_clauses.append(f"dc.document_id IN ({placeholders})")
                         logger.info(f"[Tool rag_search] Filtro por document_ids: {ids}")
                 except ValueError:
                     logger.warning(f"[Tool rag_search] document_ids inválidos: {document_ids} (ignorando filtro)")
 
             # Filter by document type (checks type OR filename)
             if document_type and document_type.strip():
-                where_clauses.append("(d.type ILIKE :doc_type OR d.filename ILIKE :doc_type)")
+                base_where_clauses.append("(d.type ILIKE :doc_type OR d.filename ILIKE :doc_type)")
                 params["doc_type"] = f"%{document_type.strip()}%"
                 logger.info(f"[Tool rag_search] Filtro por tipo/nome: {document_type}")
 
-            where_sql = " AND ".join(where_clauses)
+            # Helper to execute query
+            async def execute_query(clauses, limit=10):
+                where_sql = " AND ".join(clauses)
+                sql = sql_text(f"""
+                    SELECT
+                        dc.content,
+                        dc.section_type,
+                        dc.chunk_index,
+                        dc.token_count,
+                        d.filename,
+                        d.id AS document_id,
+                        d.type AS doc_type,
+                        (dc.embedding <=> :embedding) AS distance
+                    FROM document_chunks dc
+                    JOIN documents d ON dc.document_id = d.id
+                    WHERE {where_sql}
+                    ORDER BY dc.embedding <=> :embedding
+                    LIMIT {limit}
+                """)
+                result = await db.execute(sql, params)
+                return result.fetchall()
 
-            sql = sql_text(f"""
-                SELECT
-                    dc.content,
-                    dc.section_type,
-                    dc.chunk_index,
-                    dc.token_count,
-                    d.filename,
-                    d.id AS document_id,
-                    d.type AS doc_type,
-                    (dc.embedding <=> :embedding) AS distance
-                FROM document_chunks dc
-                JOIN documents d ON dc.document_id = d.id
-                WHERE {where_sql}
-                ORDER BY dc.embedding <=> :embedding
-                LIMIT 10
-            """)
-
-            result = await db.execute(sql, params)
-            rows = result.fetchall()
-
+            # 1. Try Strict Search
+            strict_clauses = base_where_clauses + [f"(dc.embedding <=> :embedding) < {_MAX_DISTANCE}"]
+            rows = await execute_query(strict_clauses)
             logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks (threshold: similaridade > {(1 - _MAX_DISTANCE):.0%})")
+
+            # 2. Fallback: Relaxed Search (if filtered by ID and no results)
+            if not rows and document_ids and document_ids.strip():
+                logger.info("[Tool rag_search] Fallback: Buscando sem threshold de similaridade nos documentos filtrados...")
+                rows = await execute_query(base_where_clauses, limit=5)
+                logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks no fallback")
 
             if not rows:
                 filter_desc = ""

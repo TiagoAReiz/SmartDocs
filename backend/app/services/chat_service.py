@@ -148,7 +148,7 @@ Se a busca SQL filtrada retornar VAZIO (0 resultados):
 4. Se a pergunta NÃO for sobre documentos: "Só posso responder sobre documentos do SmartDocs."
 5. NUNCA complemente com conhecimento externo
 6. Formate: R$ X.XXX,XX para valores e DD/MM/AAAA para datas
-7. Cite de qual documento (nome e ID) veio a informação
+7. Cite o NOME do documento fonte, mas NÃO mostre IDs (ex: 'ID: 112') na resposta final ao usuário.
 """
 
 
