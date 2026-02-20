@@ -68,10 +68,12 @@ async def send_chat(
     # Handle thread creation/retrieval
     thread = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
     thread_id_str = str(thread.id)
+    thread_id_val = thread.id
+    user_id_val = current_user.id
 
     result = await chat_service.chat(
         question=body.question,
-        user_id=current_user.id,
+        user_id=user_id_val,
         is_admin=is_admin,
         db=db,
         thread_id=thread_id_str,
@@ -79,11 +81,13 @@ async def send_chat(
 
     # Save to chat history
     message = ChatMessage(
-        user_id=current_user.id,
-        thread_id=thread.id,
+        user_id=user_id_val,
+        thread_id=thread_id_val,
         question=body.question,
         answer=result["answer"],
         sql_used=result.get("sql_used"),
+        row_count=result.get("row_count", 0),
+        data=result.get("data", []),
     )
     db.add(message)
     await db.commit()
@@ -109,6 +113,8 @@ async def stream_chat(
     # Handle thread creation/retrieval
     thread = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
     thread_id_str = str(thread.id)
+    thread_id_val = thread.id
+    user_id_val = current_user.id
     
     # We need to commit the thread creation so the ID exists for parallel requests if any,
     # though for this stream it matters that it exists in the transaction. 
@@ -124,10 +130,12 @@ async def stream_chat(
 
         final_answer = ""
         sql_used = None
+        row_count = 0
+        data = []
         
         async for chunk in chat_service.chat_stream(
             question=body.question,
-            user_id=current_user.id,
+            user_id=user_id_val,
             is_admin=is_admin,
             db=db,
             thread_id=thread_id_str,
@@ -137,21 +145,25 @@ async def stream_chat(
             if chunk.get("type") == "done":
                 final_answer = chunk.get("answer", "")
                 sql_used = chunk.get("sql_used")
+                row_count = chunk.get("row_count", 0)
+                data = chunk.get("data", [])
 
         # Save to chat history
         if final_answer:
             message = ChatMessage(
-                user_id=current_user.id,
-                thread_id=UUID(thread_id_str),
+                user_id=user_id_val,
+                thread_id=thread_id_val,
                 question=body.question,
                 answer=final_answer,
                 sql_used=sql_used,
+                row_count=row_count,
+                data=data,
             )
             db.add(message)
             # We need to touch the thread updated_at
             # Since we committed before, we need to fetch it or update via ID
             await db.execute(
-                select(ChatThread).where(ChatThread.id == UUID(thread_id_str))
+                select(ChatThread).where(ChatThread.id == thread_id_val)
             ) # Just to ensure it's in session? No, explicit update is better.
             
             # Simple update query for timestamp

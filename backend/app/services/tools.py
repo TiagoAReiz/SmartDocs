@@ -247,7 +247,16 @@ def make_database_query_tool(
                 f"NÃO DESISTA SEM ANTES BUSCAR PELO 'FILENAME'!"
             )
 
-        data = [dict(zip(columns, row)) for row in rows]
+        data = []
+        for row in rows:
+            mapped = {}
+            for col, val in zip(columns, row):
+                if isinstance(val, (int, float, str, bool, type(None))):
+                    mapped[col] = val
+                else:
+                    mapped[col] = str(val)
+            data.append(mapped)
+
         results_text = "\n".join(
             [str(row) for row in data[:20]]
         )

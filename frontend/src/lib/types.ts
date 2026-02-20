@@ -98,6 +98,9 @@ export interface ChatHistoryMessage {
   id: number;
   question: string;
   answer: string;
+  sql_used?: string;
+  row_count?: number;
+  data?: Record<string, unknown>[];
   created_at: string;
 }
 

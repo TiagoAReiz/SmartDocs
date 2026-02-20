@@ -121,6 +121,7 @@ export default function ChatPage() {
                     id: `a-${msg.id}`,
                     role: "assistant",
                     content: msg.answer,
+                    data: msg.data,
                     timestamp: new Date(msg.created_at),
                 });
             });
