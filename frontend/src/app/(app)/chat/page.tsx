@@ -11,6 +11,7 @@ import remarkGfm from "remark-gfm";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { ChatDataTable } from "@/components/chat-data-table";
 
 interface Message {
     id: string;
@@ -354,46 +355,7 @@ export default function ChatPage() {
 
                                         {/* Data Table */}
                                         {msg.data && msg.data.length > 0 && (
-                                            <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.08] bg-black/20">
-                                                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/[0.08]">
-                                                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                                        {msg.data.length} Resultados
-                                                    </span>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleExport(msg.data!, `smartdocs-export-${Date.now()}.csv`)}
-                                                        className="h-7 text-xs gap-1.5 hover:bg-white/10"
-                                                    >
-                                                        <Download className="h-3.5 w-3.5" />
-                                                        Exportar CSV
-                                                    </Button>
-                                                </div>
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-left text-xs">
-                                                        <thead className="bg-white/5 text-muted-foreground">
-                                                            <tr>
-                                                                {Object.keys(msg.data[0]).map((key) => (
-                                                                    <th key={key} className="px-4 py-2 font-medium uppercase tracking-wider whitespace-nowrap">
-                                                                        {key}
-                                                                    </th>
-                                                                ))}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-white/5">
-                                                            {msg.data.map((row, i) => (
-                                                                <tr key={i} className="hover:bg-white/5 transition-colors">
-                                                                    {Object.values(row).map((val, j) => (
-                                                                        <td key={j} className="px-4 py-2 whitespace-nowrap text-foreground/80">
-                                                                            {String(val)}
-                                                                        </td>
-                                                                    ))}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
+                                            <ChatDataTable data={msg.data} onExport={handleExport} />
                                         )}
 
                                         <span className={cn(
