@@ -6,6 +6,7 @@ from app.models.document_log import DocumentLog
 from app.models.chat_message import ChatMessage
 from app.models.document_chunk import DocumentChunk
 from app.models.chat_thread import ChatThread
+from app.models.document_processing_job import DocumentProcessingJob
 
 __all__ = [
     "Base",
@@ -18,5 +19,5 @@ __all__ = [
     "ChatMessage",
     "DocumentChunk",
     "ChatThread",
+    "DocumentProcessingJob",
 ]
-

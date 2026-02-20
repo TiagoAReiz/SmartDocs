@@ -2,7 +2,6 @@ import math
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     UploadFile,
@@ -16,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.core.deps import get_current_user
 from app.database import get_db, async_session
 from app.models.document import Document, DocumentStatus
+from app.models.document_processing_job import DocumentProcessingJob, JobStatus
 from app.models.user import User
 from app.schemas.document import (
     DocumentDetail,
@@ -27,18 +27,13 @@ from app.schemas.document import (
     DocumentUploadResponse,
     ReprocessResponse,
 )
+from app.schemas.document_processing_job import DocumentProcessingJobResponse
 
-from app.services.document_service import process_document, save_upload
+from app.services.document_service import save_upload
 from app.services.storage_service import storage_service
 from app.utils.file_utils import is_supported
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-
-
-async def _background_process(document_id: int):
-    """Background task wrapper — creates its own session."""
-    async with async_session() as db:
-        await process_document(document_id, db)
 
 
 @router.post(
@@ -48,11 +43,10 @@ async def _background_process(document_id: int):
 )
 async def upload_documents(
     files: list[UploadFile],
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload one or more files. Returns 202 and starts background processing."""
+    """Upload one or more files. Returns 202 and enqueues job in PostgreSQL."""
     documents = []
 
     for file in files:
@@ -69,9 +63,12 @@ async def upload_documents(
     # Commit to get IDs
     await db.commit()
 
-    # Schedule background processing for each document
+    # Schedule background processing by creating Job entries
     for doc in documents:
-        background_tasks.add_task(_background_process, doc.id)
+        job = DocumentProcessingJob(document_id=doc.id, status=JobStatus.PENDING)
+        db.add(job)
+        
+    await db.commit()
 
     return DocumentUploadResponse(
         documents=[
@@ -86,6 +83,41 @@ async def upload_documents(
     )
 
 
+@router.get("/{document_id}/status", response_model=DocumentProcessingJobResponse)
+async def get_document_status(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the current background processing status of a document."""
+    
+    # Check if document exists and belongs to user (or basic check)
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+    
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Documento não encontrado"
+        )
+        
+    job_result = await db.execute(
+        select(DocumentProcessingJob)
+        .where(DocumentProcessingJob.document_id == document_id)
+        .order_by(DocumentProcessingJob.created_at.desc())
+        .limit(1)
+    )
+    job = job_result.scalar_one_or_none()
+    
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhum job de processamento encontrado para este documento"
+        )
+        
+    return DocumentProcessingJobResponse.model_validate(job)
+
+
 @router.post(
     "/{document_id}/reprocess",
     response_model=ReprocessResponse,
@@ -93,11 +125,10 @@ async def upload_documents(
 )
 async def reprocess_document(
     document_id: int,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Reprocess a failed document."""
+    """Reprocess a failed document by enqueueing a new job."""
     result = await db.execute(
         select(Document).where(
             Document.id == document_id,
@@ -123,15 +154,16 @@ async def reprocess_document(
     doc.raw_json = None
     doc.error_message = None
     doc.page_count = None
+    
+    # Enqueue a new Job
+    job = DocumentProcessingJob(document_id=doc.id, status=JobStatus.PENDING)
+    db.add(job)
     await db.commit()
-
-    # Schedule reprocessing
-    background_tasks.add_task(_background_process, doc.id)
 
     return ReprocessResponse(
         id=doc.id,
         status="processing",
-        message="Reprocessamento iniciado",
+        message="Reprocessamento enfileirado",
     )
 
 
