@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import api from "@/lib/api";
 import type { UploadResponse } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
@@ -133,6 +133,29 @@ export default function UploadPage() {
         },
         [acceptedTypes]
     );
+
+    // Poll the status of processing items
+    useEffect(() => {
+        const processingItems = uploads.filter(u => u.status === "processing" || u.status === "uploaded");
+        if (processingItems.length === 0) return;
+
+        const interval = setInterval(async () => {
+            for (const item of processingItems) {
+                if (!item.documentId) continue;
+                try {
+                    const res = await api.get(`/documents/${item.documentId}/status`);
+                    const newStatus = res.data.status.toLowerCase() as DocumentStatus;
+                    if (newStatus !== item.status) {
+                        setUploads(prev => prev.map(u => u.id === item.id ? { ...u, status: newStatus } : u));
+                    }
+                } catch {
+                    // Ignore errors during polling
+                }
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [uploads]);
 
     const handleReprocess = async (item: UploadItem) => {
         if (!item.documentId) return;

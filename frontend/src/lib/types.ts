@@ -72,6 +72,17 @@ export interface UploadResponse {
   }[];
 }
 
+export interface DocumentProcessingJobResponse {
+  id: string;
+  document_id: number;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  attempts: number;
+  error_log: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
 export interface ReprocessResponse {
   id: number;
   status: string;

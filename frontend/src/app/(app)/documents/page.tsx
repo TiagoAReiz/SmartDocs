@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import useSWR from "swr";
 import api from "@/lib/api";
 import type {
-    Document,
     DocumentDetail,
     PaginatedDocuments,
 } from "@/lib/types";
@@ -37,45 +37,38 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export default function DocumentsPage() {
-    const [documents, setDocuments] = useState<Document[]>([]);
-    const [loading, setLoading] = useState(true);
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [page, setPage] = useState(1);
-    const [total, setTotal] = useState(0);
-    const [totalPages, setTotalPages] = useState(1);
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<DocumentDetail | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const perPage = 20;
 
-    const fetchDocuments = useCallback(async () => {
-        setLoading(true);
-        try {
-            const params = new URLSearchParams();
-            if (search) params.set("search", search);
-            if (statusFilter !== "all") params.set("status_filter", statusFilter);
-            params.set("page", String(page));
-            params.set("per_page", String(perPage));
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (statusFilter !== "all") params.set("status_filter", statusFilter);
+    params.set("page", String(page));
+    params.set("per_page", String(perPage));
 
-            const res = await api.get<PaginatedDocuments>(
-                `/documents?${params.toString()}`
-            );
-            setDocuments(res.data.documents);
-            setTotal(res.data.total);
-            setTotalPages(res.data.total_pages);
-        } catch {
-            toast.error("Erro ao carregar documentos");
-        } finally {
-            setLoading(false);
+    const { data, mutate, isLoading } = useSWR<PaginatedDocuments>(
+        `/documents?${params.toString()}`,
+        (url: string) => api.get(url).then(r => r.data),
+        {
+            refreshInterval: (currentData) => {
+                if (!currentData) return 0;
+                const needsPolling = currentData.documents.some(d => d.status === "uploaded" || d.status === "processing");
+                return needsPolling ? 3000 : 0;
+            }
         }
-    }, [search, statusFilter, page]);
+    );
 
-    useEffect(() => {
-        fetchDocuments();
-    }, [fetchDocuments]);
+    const documents = data?.documents || [];
+    const total = data?.total || 0;
+    const totalPages = data?.total_pages || 1;
+    const loading = isLoading && !data;
 
     useEffect(() => {
         const t = window.setTimeout(() => {
@@ -146,7 +139,7 @@ export default function DocumentsPage() {
         try {
             await api.post(`/documents/${docId}/reprocess`);
             toast.success("Reprocessamento iniciado");
-            fetchDocuments();
+            mutate();
         } catch {
             toast.error("Erro ao reprocessar documento");
         }
