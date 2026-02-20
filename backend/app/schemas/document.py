@@ -38,7 +38,6 @@ class DocumentListItem(BaseModel):
     id: int
     filename: str
     original_extension: str
-    type: str | None = None
     upload_date: datetime | None = None
     page_count: int | None = None
     status: str
@@ -59,7 +58,6 @@ class DocumentDetail(BaseModel):
     filename: str
     original_extension: str
     mime_type: str | None = None
-    type: str | None = None
     upload_date: datetime | None = None
     page_count: int | None = None
     status: str

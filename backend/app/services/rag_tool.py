@@ -31,7 +31,6 @@ def make_rag_search_tool(
     async def rag_search(
         query: str,
         document_ids: str = "",
-        document_type: str = "",
         filename: str = "",
     ) -> str:
         """Busca semântica nos documentos extraídos usando RAG.
@@ -47,8 +46,6 @@ def make_rag_search_tool(
             query: Pergunta ou termo de busca em linguagem natural.
             document_ids: Opcional. IDs reais da tabela `documents` (ex: "42,87").
                           Aceita formatos "1,2", "[1, 2]" ou lista.
-            document_type: Opcional. Tipo de documento ou termo no nome do arquivo
-                           (ex: "contrato", "relatorio").
             filename: Opcional. Nome do arquivo (parcial ou completo) se você quiser filtrar um arquivo listado no histórico.
 
         Returns:
@@ -58,7 +55,7 @@ def make_rag_search_tool(
         logger.info(f"[Tool rag_search] Query: {query[:100]}")
         logger.info(
             f"[Tool rag_search] Filtros: document_ids={document_ids or '(todos)'}, "
-            f"document_type={document_type or '(todos)'}, filename={filename or '(todos)'}, "
+            f"filename={filename or '(todos)'}, "
             f"user_id={user_id}, is_admin={is_admin}"
         )
 
@@ -94,12 +91,6 @@ def make_rag_search_tool(
                 except ValueError:
                     logger.warning(f"[Tool rag_search] document_ids inválidos: {document_ids} (ignorando filtro)")
 
-            # Filter by document type (checks type OR filename)
-            if document_type and document_type.strip():
-                base_where_clauses.append("(d.type ILIKE :doc_type OR d.filename ILIKE :doc_type)")
-                params["doc_type"] = f"%{document_type.strip()}%"
-                logger.info(f"[Tool rag_search] Filtro por tipo/nome: {document_type}")
-
             # Filter by explicit filename
             if filename and filename.strip():
                 base_where_clauses.append("d.filename ILIKE :filename_filter")
@@ -117,7 +108,6 @@ def make_rag_search_tool(
                         dc.token_count,
                         d.filename,
                         d.id AS document_id,
-                        d.type AS doc_type,
                         (dc.embedding <=> :embedding) AS distance
                     FROM document_chunks dc
                     JOIN documents d ON dc.document_id = d.id
@@ -146,8 +136,6 @@ def make_rag_search_tool(
                     filter_desc += f" nos IDs {document_ids}"
                 if filename:
                     filter_desc += f" (arquivo '{filename}')"
-                if document_type:
-                    filter_desc += f" do tipo '{document_type}'"
                 logger.info("[Tool rag_search] Nenhum chunk relevante encontrado")
                 
                 # ReAct Behavioral Guardrail: If they used document_ids and failed, it's 99% a hallucination.
@@ -169,13 +157,11 @@ def make_rag_search_tool(
             for i, row in enumerate(rows, 1):
                 similarity = 1 - row.distance
                 section_label = row.section_type or "texto"
-                doc_type_label = f", Tipo: {row.doc_type}" if row.doc_type else ""
                 
                 unique_docs.add(f"{row.filename} (ID:{row.document_id})")
                 
                 chunks_text.append(
-                    f"--- Trecho {i} (Documento: {row.filename} [ID:{row.document_id}]"
-                    f"{doc_type_label}, "
+                    f"--- Trecho {i} (Documento: {row.filename} [ID:{row.document_id}], "
                     f"Seção: {section_label}, "
                     f"Similaridade: {similarity:.0%}) ---\n"
                     f"{row.content}"

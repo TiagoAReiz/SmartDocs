@@ -73,7 +73,6 @@ O sistema extrai dados de documentos via OCR e os armazena em múltiplas camadas
 ### documents
 - extracted_text: texto OCR completo do documento (pode conter parágrafos, cláusulas, qualquer conteúdo)
 - status: 'uploaded', 'processing', 'processed', 'failed'
-- type: tipo classificado (ex: 'contrato', 'relatorio')
 - raw_json: metadados da extração (JSON)
 
 ### document_fields
@@ -123,8 +122,8 @@ O sistema extrai dados de documentos via OCR e os armazena em múltiplas camadas
 14. Use LIMIT razoável (máx 100 linhas)
 15. Para descobrir quais field_keys existem, use:
     SELECT DISTINCT field_key FROM document_fields ORDER BY field_key
-16. Para contar documentos por tipo/status, agrupe por documents.type ou documents.status
-17. ⚠️ IMPORTANTE: Se pedirem "contratos", "acordos" ou afins, E ELES NÃO ESTIVEREM NA TABELA `contracts`, eles ainda podem existir como arquivos normais! OBRIGATORIAMENTE busque na tabela `documents` usando `type ILIKE '%contrato%'` ou `filename ILIKE '%contrato%'`. Nunca diga que não há contratos sem antes fazer essa busca.
+16. Para contar documentos por status, agrupe por documents.status
+17. ⚠️ IMPORTANTE: Se pedirem "contratos", "acordos" ou afins, E ELES NÃO ESTIVEREM NA TABELA `contracts`, eles ainda podem existir como arquivos normais! OBRIGATORIAMENTE busque na tabela `documents` usando `filename ILIKE '%contrato%'`. Nunca diga que não há contratos sem antes fazer essa busca.
 """
 
 
@@ -227,7 +226,7 @@ def make_database_query_tool(
                 f"DICA OBRIGATÓRIA PARA O AGENTE: Se você estava buscando contratos ou documentos específicos "
                 f"e usou as tabelas 'contracts' ou 'document_fields', VOCÊ DEVE fazer UMA NOVA CHAMADA "
                 f"agora mesmo para 'database_query', cruzando OBRIGATORIAMENTE a coluna 'filename'.\n"
-                f"Exemplo exigido: SELECT id, filename FROM documents WHERE type ILIKE '%contrato%' OR filename ILIKE '%contrato%'. "
+                f"Exemplo exigido: SELECT id, filename FROM documents WHERE filename ILIKE '%contrato%'. "
                 f"NÃO DESISTA SEM ANTES BUSCAR PELO 'FILENAME'!"
             )
 

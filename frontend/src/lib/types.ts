@@ -27,7 +27,6 @@ export interface Document {
   id: number;
   filename: string;
   original_extension: string;
-  type: string;
   upload_date: string;
   page_count: number;
   status: DocumentStatus;

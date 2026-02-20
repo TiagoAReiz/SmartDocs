@@ -152,14 +152,6 @@ export default function DocumentsPage() {
         }
     };
 
-    const typeColors: Record<string, string> = {
-        contrato: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-        relatorio: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-        nota_fiscal: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-        fatura: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-        default: "bg-slate-500/10 text-slate-400 border-slate-500/20",
-    };
-
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString("pt-BR", {
             day: "2-digit",
@@ -246,13 +238,7 @@ export default function DocumentsPage() {
                                     <StatusBadge status={doc.status} />
                                 </div>
 
-                                <div className="flex items-center justify-between">
-                                    <Badge
-                                        variant="outline"
-                                        className={`text-[10px] uppercase tracking-wider ${typeColors[doc.type] || typeColors.default}`}
-                                    >
-                                        {doc.type}
-                                    </Badge>
+                                <div className="flex items-center justify-end">
                                     <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform", expandedId === doc.id && "rotate-180")} />
                                 </div>
 
@@ -279,7 +265,6 @@ export default function DocumentsPage() {
                             <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                                 <tr>
                                     <th className="px-6 py-4 font-medium">Nome</th>
-                                    <th className="px-6 py-4 font-medium">Tipo</th>
                                     <th className="px-6 py-4 font-medium">Data</th>
                                     <th className="px-6 py-4 font-medium">Pág.</th>
                                     <th className="px-6 py-4 font-medium">Status</th>
@@ -291,7 +276,6 @@ export default function DocumentsPage() {
                                     Array.from({ length: 5 }).map((_, i) => (
                                         <tr key={i}>
                                             <td className="px-6 py-4"><Skeleton className="h-4 w-48" /></td>
-                                            <td className="px-6 py-4"><Skeleton className="h-5 w-20" /></td>
                                             <td className="px-6 py-4"><Skeleton className="h-4 w-24" /></td>
                                             <td className="px-6 py-4"><Skeleton className="h-4 w-8" /></td>
                                             <td className="px-6 py-4"><Skeleton className="h-5 w-20" /></td>
@@ -315,14 +299,6 @@ export default function DocumentsPage() {
                                                         <span className="font-medium text-foreground">{doc.filename}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={`text-[10px] uppercase font-bold tracking-wider rounded-md border-0 ${typeColors[doc.type] || typeColors.default}`}
-                                                    >
-                                                        {doc.type}
-                                                    </Badge>
-                                                </td>
                                                 <td className="px-6 py-4 text-muted-foreground">{formatDate(doc.upload_date)}</td>
                                                 <td className="px-6 py-4 text-muted-foreground">{doc.page_count}</td>
                                                 <td className="px-6 py-4"><StatusBadge status={doc.status} /></td>
@@ -332,7 +308,7 @@ export default function DocumentsPage() {
                                             </tr>
                                             {expandedId === doc.id && (
                                                 <tr className="bg-muted/20">
-                                                    <td colSpan={6} className="p-0">
+                                                    <td colSpan={5} className="p-0">
                                                         <div className="border-t border-white/[0.04] p-6 shadow-inner">
                                                             <ExpandedDocumentDetail
                                                                 detail={detail}

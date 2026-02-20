@@ -33,7 +33,6 @@ class Document(Base):
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     original_extension: Mapped[str] = mapped_column(String(20), nullable=False)
     mime_type: Mapped[str | None] = mapped_column(String(100))
-    type: Mapped[str | None] = mapped_column(String(50))  # contrato, relatorio, etc.
     page_count: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[DocumentStatus] = mapped_column(
         String(20), nullable=False, default=DocumentStatus.UPLOADED, index=True
