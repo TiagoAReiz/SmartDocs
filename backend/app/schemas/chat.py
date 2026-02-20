@@ -23,6 +23,9 @@ class ChatHistoryItem(BaseModel):
     id: int
     question: str
     answer: str
+    sql_used: str | None = None
+    row_count: int = 0
+    data: list[dict[str, Any]] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}

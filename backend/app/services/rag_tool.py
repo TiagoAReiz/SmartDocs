@@ -97,38 +97,83 @@ def make_rag_search_tool(
                 params["filename_filter"] = f"%{filename.strip()}%"
                 logger.info(f"[Tool rag_search] Filtro por filename: {filename}")
 
-            # Helper to execute query
-            async def execute_query(clauses, limit=10):
+            # Helper to execute query using Hybrid RRF
+            async def execute_query(clauses, limit=10, use_threshold=True):
                 where_sql = " AND ".join(clauses)
+                
+                # RRF Formula constants
+                # For more strict or relaxed ranks, change k.
+                k = 60
+                
+                # Build the robust Hybrid Query
                 sql = sql_text(f"""
+                    WITH vector_search AS (
+                        SELECT
+                            dc.id AS chunk_id,
+                            dc.content,
+                            dc.section_type,
+                            dc.chunk_index,
+                            dc.token_count,
+                            d.filename,
+                            d.id AS document_id,
+                            (dc.embedding <=> :embedding) AS distance,
+                            RANK() OVER (ORDER BY (dc.embedding <=> :embedding)) AS semantic_rank
+                        FROM document_chunks dc
+                        JOIN documents d ON dc.document_id = d.id
+                        WHERE {where_sql}
+                        -- Only keep chunks inside the distance threshold (if enabled)
+                        {"AND (dc.embedding <=> :embedding) < " + str(_MAX_DISTANCE) if use_threshold else ""}
+                        ORDER BY distance
+                        LIMIT {limit * 2} 
+                    ),
+                    keyword_search AS (
+                        SELECT
+                            dc.id AS chunk_id,
+                            -- Assuming exact match query uses the same user input:
+                            RANK() OVER (ORDER BY ts_rank_cd(dc.search_vector, websearch_to_tsquery('portuguese', :exact_query)) DESC) AS keyword_rank
+                        FROM document_chunks dc
+                        JOIN documents d ON dc.document_id = d.id
+                        WHERE {where_sql}
+                        AND dc.search_vector @@ websearch_to_tsquery('portuguese', :exact_query)
+                        ORDER BY keyword_rank
+                        LIMIT {limit * 2}
+                    )
                     SELECT
-                        dc.content,
-                        dc.section_type,
-                        dc.chunk_index,
-                        dc.token_count,
-                        d.filename,
-                        d.id AS document_id,
-                        (dc.embedding <=> :embedding) AS distance
-                    FROM document_chunks dc
-                    JOIN documents d ON dc.document_id = d.id
-                    WHERE {where_sql}
-                    ORDER BY dc.embedding <=> :embedding
+                        COALESCE(v.content, (SELECT content FROM document_chunks WHERE id = COALESCE(v.chunk_id, k.chunk_id))) AS content,
+                        COALESCE(v.section_type, (SELECT section_type FROM document_chunks WHERE id = COALESCE(v.chunk_id, k.chunk_id))) AS section_type,
+                        COALESCE(v.chunk_index, (SELECT chunk_index FROM document_chunks WHERE id = COALESCE(v.chunk_id, k.chunk_id))) AS chunk_index,
+                        COALESCE(v.token_count, (SELECT token_count FROM document_chunks WHERE id = COALESCE(v.chunk_id, k.chunk_id))) AS token_count,
+                        COALESCE(v.filename, (SELECT filename FROM documents WHERE id = COALESCE(v.document_id, (SELECT document_id FROM document_chunks WHERE id = k.chunk_id)))) AS filename,
+                        COALESCE(v.document_id, (SELECT document_id FROM document_chunks WHERE id = k.chunk_id)) AS document_id,
+                        COALESCE(v.distance, 1.0) AS distance,
+                        COALESCE(v.semantic_rank, 1000) AS semantic_rank,
+                        COALESCE(k.keyword_rank, 1000) AS keyword_rank,
+                        -- Reciprocal Rank Fusion (RRF)
+                        COALESCE(1.0 / ({k} + v.semantic_rank), 0.0) + 
+                        COALESCE(1.0 / ({k} + k.keyword_rank), 0.0) AS rrf_score
+                    FROM vector_search v
+                    FULL OUTER JOIN keyword_search k ON v.chunk_id = k.chunk_id
+                    ORDER BY rrf_score DESC
                     LIMIT {limit}
                 """)
-                result = await db.execute(sql, params)
+                # We need to add 'exact_query' to params just before execution
+                exec_params = params.copy()
+                exec_params["exact_query"] = query
+                
+                result = await db.execute(sql, exec_params)
                 return result.fetchall()
 
-            # 1. Try Strict Search
-            strict_clauses = base_where_clauses + [f"(dc.embedding <=> :embedding) < {_MAX_DISTANCE}"]
-            rows = await execute_query(strict_clauses)
-            logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks (threshold: similaridade > {(1 - _MAX_DISTANCE):.0%})")
+            # 1. Try Strict Search (Threshold applied inside CTE)
+            strict_clauses = base_where_clauses
+            rows = await execute_query(strict_clauses, use_threshold=True)
+            logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks (Busca Híbrida RRF)")
 
             # 2. Fallback: Relaxed Search (if filtered by ID or filename and no results)
             is_filtered = bool((document_ids and document_ids.strip()) or (filename and filename.strip()))
             if not rows and is_filtered:
                 logger.info("[Tool rag_search] Fallback: Buscando sem threshold de similaridade nos documentos filtrados...")
-                rows = await execute_query(base_where_clauses, limit=5)
-                logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks no fallback")
+                rows = await execute_query(base_where_clauses, limit=5, use_threshold=False)
+                logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks no fallback (Busca Híbrida)")
 
             if not rows:
                 filter_desc = ""
