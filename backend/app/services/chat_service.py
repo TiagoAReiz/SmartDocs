@@ -92,10 +92,10 @@ SELECT d.id, d.filename, c.client_name FROM documents d
 
 **TENTATIVA 2** (se a anterior retornou 0 resultados) — document_fields (campos extraídos):
 ```sql
-SELECT DISTINCT df.document_id, d.filename, df.field_name, df.field_value
+SELECT DISTINCT df.document_id, d.filename, df.field_key, df.field_value
   FROM document_fields df
   JOIN documents d ON df.document_id = d.id
-  WHERE df.field_value ILIKE '%termo%'
+  WHERE df.field_value ILIKE '%termo%' OR df.field_key ILIKE '%termo%'
 ```
 
 **TENTATIVA 3** (se as anteriores retornaram 0) — documents (nome do arquivo e texto):
@@ -108,8 +108,8 @@ SELECT id, filename FROM documents
 Se o usuário pedir algo sobre "contratos" e a tabela `contracts` estiver vazia ou não tiver os dados daquele cliente, **NÃO ASSUMA QUE NÃO EXISTE**.
 Sempre tente buscar assim:
 ```sql
-SELECT id, filename, type, status FROM documents
-WHERE type ILIKE '%contrato%' OR filename ILIKE '%contrato%'
+SELECT id, filename, status FROM documents
+WHERE filename ILIKE '%contrato%'
 ```
 
 ### Dica: consulta combinada (mais eficiente):

@@ -6,6 +6,8 @@ autonomously when to query the database vs. respond directly.
 """
 
 from typing import Any, Callable, Optional
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from langchain_core.tools import tool
 from loguru import logger
@@ -63,8 +65,17 @@ async def _fetch_db_schema() -> str:
 
 def _build_sql_prompt(schema: str) -> str:
     """Build the SQL generation prompt with the given schema."""
+    now_sp = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    current_date_str = now_sp.strftime("%Y-%m-%d")
+    current_time_str = now_sp.strftime("%H:%M:%S")
+
     return f"""Você é um gerador de SQL PostgreSQL para o sistema SmartDocs.
 O sistema extrai dados de documentos via OCR e os armazena em múltiplas camadas.
+
+Atenção: A data atual do sistema (fuso horário do usuário, Brasil) é {current_date_str} e a hora é {current_time_str}.
+Sempre que o usuário referir-se a "hoje", "ontem", "este mês", calcule com base em {current_date_str}.
+Para "documentos enviados hoje", use:
+`created_at >= '{current_date_str} 00:00:00-03:00' AND created_at <= '{current_date_str} 23:59:59-03:00'`
 
 {schema}
 
@@ -106,9 +117,15 @@ O sistema extrai dados de documentos via OCR e os armazena em múltiplas camadas
 7. Sempre inclua a tabela documents no FROM quando precisar filtrar por documento
 8. Para buscar texto livre em extracted_text, use: documents.extracted_text ILIKE '%termo%'
 9. Para buscar campos por nome flexível: document_fields.field_key ILIKE '%nome_aproximado%'
-10. Para consolidar múltiplos campos do MESMO documento:
-    MAX(CASE WHEN df.field_key ILIKE '%chave%' THEN df.field_value END) AS alias
-    com GROUP BY documents.id
+10. Para cruzar informações do MESMO documento em `document_fields`, prefira agregar os dados:
+    ```sql
+    SELECT d.filename,
+           MAX(CASE WHEN df.field_key ILIKE '%CNPJ%' THEN df.field_value END) AS cnpj,
+           MAX(CASE WHEN df.field_key ILIKE '%NOME%' THEN df.field_value END) AS nome
+    FROM documents d
+    JOIN document_fields df ON d.id = df.document_id
+    GROUP BY d.filename
+    ```
 11. PERGUNTAS ANALÍTICAS vs TEXTUAIS:
     Se o usuário perguntar "quais os prazos dos contratos":
     NÃO busque `extracted_text ILIKE '%prazo%'`.
@@ -123,7 +140,7 @@ O sistema extrai dados de documentos via OCR e os armazena em múltiplas camadas
 15. Para descobrir quais field_keys existem, use:
     SELECT DISTINCT field_key FROM document_fields ORDER BY field_key
 16. Para contar documentos por status, agrupe por documents.status
-17. ⚠️ IMPORTANTE: Se pedirem "contratos", "acordos" ou afins, E ELES NÃO ESTIVEREM NA TABELA `contracts`, eles ainda podem existir como arquivos normais! OBRIGATORIAMENTE busque na tabela `documents` usando `filename ILIKE '%contrato%'`. Nunca diga que não há contratos sem antes fazer essa busca.
+17. ⚠️ IMPORTANTE: Se pedirem "contratos", "acordos" ou relatórios sobre clientes, E ELES NÃO ESTIVEREM NA TABELA `contracts`, OBRIGATORIAMENTE busque cruzando informações em `document_fields` (buscando por `field_key` ou `field_value` relevantes) OU na tabela `documents` usando `filename ILIKE '%contrato%'`. NUNCA diga que não existe sem testar essas duas alternativas!
 """
 
 
