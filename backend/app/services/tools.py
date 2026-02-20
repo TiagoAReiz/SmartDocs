@@ -22,6 +22,9 @@ from app.services.sql_guard import validate_sql, SQLGuardError
 # Tables hidden from the agent for security
 _HIDDEN_TABLES = {"users", "alembic_version", "chat_messages", "document_chunks"}
 
+# Columns hidden from the agent to save tokens and context window
+_HIDDEN_COLUMNS = {"updated_at", "hashed_password", "password_hash"}
+
 
 async def _fetch_db_schema() -> str:
     """Dynamically introspect the database and return schema description.
@@ -40,7 +43,7 @@ async def _fetch_db_schema() -> str:
                 continue
 
             columns = insp.get_columns(table_name)
-            col_names = [c["name"] for c in columns]
+            col_names = [c["name"] for c in columns if c["name"] not in _HIDDEN_COLUMNS]
             tables_info.append(f"- {table_name} ({', '.join(col_names)})")
 
             # Detect foreign keys for relationships
