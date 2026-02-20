@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import useSWR from "swr";
 import api from "@/lib/api";
 import type {
@@ -277,9 +277,8 @@ export default function DocumentsPage() {
                                     ))
                                 ) : (
                                     documents.map((doc) => (
-                                        <>
+                                        <Fragment key={doc.id}>
                                             <tr
-                                                key={doc.id}
                                                 onClick={() => handleExpand(doc.id)}
                                                 className={cn(
                                                     "cursor-pointer transition-colors hover:bg-muted/50",
@@ -314,7 +313,7 @@ export default function DocumentsPage() {
                                                     </td>
                                                 </tr>
                                             )}
-                                        </>
+                                        </Fragment>
                                     ))
                                 )}
                             </tbody>
