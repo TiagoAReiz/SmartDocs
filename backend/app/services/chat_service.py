@@ -158,9 +158,22 @@ async def _get_thread_history(db: AsyncSession, thread_id: str | None) -> list[A
         messages = result.scalars().all()
 
         history = []
-        for msg in messages:
+        total_messages = len(messages)
+        for i, msg in enumerate(messages):
             history.append(HumanMessage(content=msg.question))
-            history.append(AIMessage(content=msg.answer))
+
+            # Resumo automático do AI para economizar tokens na memória do chat
+            is_last_message = (i == total_messages - 1)
+            
+            # Se não é a última mensagem, e ela gerou dezenas de linhas no SQL ou tem mais de 500 chars (muitas vezes tabelas renderizadas), nós a encurtamos
+            if not is_last_message and (msg.row_count > 0 or len(msg.answer) > 500):
+                if msg.row_count > 0:
+                    summary = f"[Resumo de contexto AI: O sistema retornou uma tabela com {msg.row_count} linhas nesta iteração. Resposta truncada para economizar tokens.]"
+                else:
+                    summary = f"[Resumo de contexto AI: Resposta textual muito longa do assistente omitida nesta iteração para economizar tokens.]"
+                history.append(AIMessage(content=summary))
+            else:
+                history.append(AIMessage(content=msg.answer))
 
         logger.info(f"[Chat] Histórico carregado: {len(messages)} pares de mensagens da thread {thread_id}")
         return history
