@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import api from "@/lib/api";
-import type { ChatResponse, ChatHistoryMessage, ChatThread } from "@/lib/types";
+import { useRef, useEffect } from "react";
+import { useChat } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Bot, User, Menu, Sparkles, StopCircle, Download } from "lucide-react";
+import { Send, Bot, User, Menu, Sparkles, StopCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatSidebar } from "@/components/chat-sidebar";
@@ -13,28 +12,23 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { ChatDataTable } from "@/components/chat-data-table";
 
-interface Message {
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    data?: Record<string, unknown>[];
-    timestamp: Date;
-}
-
-const THREADS_PER_PAGE = 20;
-
 export default function ChatPage() {
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [input, setInput] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
-
-    // Thread state
-    const [threads, setThreads] = useState<ChatThread[]>([]);
-    const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
-    const [isThreadsLoading, setIsThreadsLoading] = useState(false);
-    const [threadSearchTerm, setThreadSearchTerm] = useState("");
-    const [threadPage, setThreadPage] = useState(0);
-    const [hasMoreThreads, setHasMoreThreads] = useState(true);
+    const {
+        messages,
+        input,
+        setInput,
+        isLoading,
+        threads,
+        selectedThreadId,
+        isThreadsLoading,
+        hasMoreThreads,
+        handleThreadSearch,
+        handleLoadMoreThreads,
+        handleSelectThread,
+        handleNewChat,
+        handleDeleteThread,
+        handleSend,
+    } = useChat();
 
     const scrollViewportRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -59,158 +53,34 @@ export default function ChatPage() {
         }
     }, [messages.length, isLoading]);
 
-    const fetchThreads = useCallback(async (page: number, search: string) => {
-        setIsThreadsLoading(true);
-        try {
-            const params = new URLSearchParams({
-                limit: THREADS_PER_PAGE.toString(),
-                offset: (page * THREADS_PER_PAGE).toString(),
-            });
-            if (search) {
-                params.append("search", search);
-            }
-
-            const res = await api.get<ChatThread[]>(`/chat/threads?${params.toString()}`);
-
-            setThreads((prev) => {
-                if (page === 0) return res.data;
-                // Avoid duplicates
-                const newThreads = res.data.filter(t => !prev.some(p => p.id === t.id));
-                return [...prev, ...newThreads];
-            });
-
-            setHasMoreThreads(res.data.length === THREADS_PER_PAGE);
-        } catch (error) {
-            console.error("Failed to fetch threads:", error);
-        } finally {
-            setIsThreadsLoading(false);
-        }
-    }, []);
-
-    const handleThreadSearch = useCallback((term: string) => {
-        setThreadSearchTerm(term);
-        setThreadPage(0);
-        fetchThreads(0, term);
-    }, [fetchThreads]);
-
-    const handleLoadMoreThreads = useCallback(() => {
-        if (!hasMoreThreads || isThreadsLoading) return;
-        const nextPage = threadPage + 1;
-        setThreadPage(nextPage);
-        fetchThreads(nextPage, threadSearchTerm);
-    }, [hasMoreThreads, isThreadsLoading, threadPage, threadSearchTerm, fetchThreads]);
-
-    const handleSelectThread = async (threadId: string) => {
-        if (threadId === selectedThreadId) return;
-
-        setSelectedThreadId(threadId);
-        setIsLoading(true);
-        setMessages([]);
-
-        try {
-            const res = await api.get<{ messages: ChatHistoryMessage[] }>(`/chat/threads/${threadId}/messages`);
-            const history: Message[] = [];
-            res.data.messages.forEach((msg) => {
-                history.push({
-                    id: `q-${msg.id}`,
-                    role: "user",
-                    content: msg.question,
-                    timestamp: new Date(msg.created_at),
-                });
-                history.push({
-                    id: `a-${msg.id}`,
-                    role: "assistant",
-                    content: msg.answer,
-                    data: msg.data,
-                    timestamp: new Date(msg.created_at),
-                });
-            });
-            setMessages(history);
-            shouldAutoScrollRef.current = true;
-        } catch (error) {
-            console.error("Failed to fetch thread messages:", error);
-        } finally {
-            setIsLoading(false);
-        }
+    const setShouldAutoScroll = (v: boolean) => {
+        shouldAutoScrollRef.current = v;
     };
 
-    const handleNewChat = () => {
-        setSelectedThreadId(undefined);
-        setMessages([]);
-        setTimeout(() => inputRef.current?.focus(), 100);
+    const focusInput = () => {
+        inputRef.current?.focus();
     };
 
-    const handleDeleteThread = async (threadId: string) => {
-        if (!confirm("Tem certeza que deseja excluir esta conversa?")) return;
-
-        try {
-            await api.delete(`/chat/threads/${threadId}`);
-            setThreads((prev) => prev.filter((t) => t.id !== threadId));
-            if (selectedThreadId === threadId) {
-                handleNewChat();
-            }
-        } catch (error) {
-            console.error("Failed to delete thread:", error);
-        }
+    const onSelectThread = (id: string) => {
+        handleSelectThread(id, setShouldAutoScroll);
     };
 
-    const handleSend = async () => {
-        const question = input.trim();
-        if (!question || isLoading) return;
+    const onNewChat = () => {
+        handleNewChat(focusInput);
+    };
 
-        shouldAutoScrollRef.current = true;
-        const userMsg: Message = {
-            id: `user-${Date.now()}`,
-            role: "user",
-            content: question,
-            timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, userMsg]);
-        setInput("");
-        setIsLoading(true);
+    const onDeleteThread = (id: string) => {
+        handleDeleteThread(id, focusInput);
+    };
 
-        try {
-            const res = await api.post<ChatResponse>("/chat", {
-                question,
-                thread_id: selectedThreadId
-            });
-
-            const assistantMsg: Message = {
-                id: `assistant-${Date.now()}`,
-                role: "assistant",
-                content: res.data.answer,
-                data: res.data.data,
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, assistantMsg]);
-
-            if (!selectedThreadId && res.data.thread_id) {
-                setSelectedThreadId(res.data.thread_id);
-                // Refresh threads to show new one at top
-                fetchThreads(0, threadSearchTerm);
-            } else if (selectedThreadId) {
-                // Ideally move to top, but refreshing list is safer
-                fetchThreads(0, threadSearchTerm);
-            }
-
-        } catch {
-            const errorMsg: Message = {
-                id: `error-${Date.now()}`,
-                role: "assistant",
-                content: "Desculpe, ocorreu um erro ao processar sua pergunta. Tente novamente.",
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, errorMsg]);
-        } finally {
-            setIsLoading(false);
-            setTimeout(() => inputRef.current?.focus(), 100);
-        }
+    const onSend = () => {
+        handleSend(setShouldAutoScroll, focusInput);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            handleSend();
+            onSend();
         }
     };
 
@@ -255,9 +125,9 @@ export default function ChatPage() {
                 <ChatSidebar
                     threads={threads}
                     selectedThreadId={selectedThreadId}
-                    onSelectThread={handleSelectThread}
-                    onNewChat={handleNewChat}
-                    onDeleteThread={handleDeleteThread}
+                    onSelectThread={onSelectThread}
+                    onNewChat={onNewChat}
+                    onDeleteThread={onDeleteThread}
                     isLoading={isThreadsLoading}
                     onSearch={handleThreadSearch}
                     onLoadMore={handleLoadMoreThreads}
@@ -279,11 +149,9 @@ export default function ChatPage() {
                             <ChatSidebar
                                 threads={threads}
                                 selectedThreadId={selectedThreadId}
-                                onSelectThread={(id) => {
-                                    handleSelectThread(id);
-                                }}
-                                onNewChat={handleNewChat}
-                                onDeleteThread={handleDeleteThread}
+                                onSelectThread={onSelectThread}
+                                onNewChat={onNewChat}
+                                onDeleteThread={onDeleteThread}
                                 isLoading={isThreadsLoading}
                                 onSearch={handleThreadSearch}
                                 onLoadMore={handleLoadMoreThreads}
@@ -292,7 +160,7 @@ export default function ChatPage() {
                         </SheetContent>
                     </Sheet>
                     <span className="font-semibold text-white">Chat</span>
-                    <Button variant="ghost" size="icon" onClick={handleNewChat}>
+                    <Button variant="ghost" size="icon" onClick={onNewChat}>
                         <Sparkles className="h-4 w-4 text-primary" />
                     </Button>
                 </div>
@@ -318,7 +186,7 @@ export default function ChatPage() {
                                             key={chip}
                                             onClick={() => {
                                                 setInput(chip);
-                                                inputRef.current?.focus();
+                                                focusInput();
                                             }}
                                             className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-foreground text-left"
                                         >
@@ -410,7 +278,7 @@ export default function ChatPage() {
                             />
 
                             <Button
-                                onClick={handleSend}
+                                onClick={onSend}
                                 disabled={!input.trim() || isLoading}
                                 size="icon"
                                 className={cn(

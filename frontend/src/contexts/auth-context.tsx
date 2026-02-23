@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
-import type { User, LoginRequest, LoginResponse } from "@/lib/types";
+import type { User, LoginRequest, LoginResponse } from "@/types";
 
 interface AuthContextType {
     user: User | null;
