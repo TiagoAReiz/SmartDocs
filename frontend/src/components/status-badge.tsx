@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { DocumentStatus } from "@/lib/types";
+import type { DocumentStatus } from "@/types";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Loader2, XCircle, Clock } from "lucide-react";
 

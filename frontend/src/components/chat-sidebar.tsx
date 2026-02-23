@@ -15,7 +15,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChatThread } from "@/lib/types";
+import { ChatThread } from "@/types";
 import { useDebounce } from "@/hooks/use-debounce";
 
 interface ChatSidebarProps extends React.HTMLAttributes<HTMLDivElement> {

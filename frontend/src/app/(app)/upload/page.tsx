@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import api from "@/lib/api";
-import type { UploadResponse } from "@/lib/types";
+import type { UploadResponse } from "@/types";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import {
     FileWarning
 } from "lucide-react";
 import { toast } from "sonner";
-import type { DocumentStatus } from "@/lib/types";
+import type { DocumentStatus } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface UploadItem {
