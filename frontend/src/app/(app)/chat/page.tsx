@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useChat } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Bot, User, Menu, Sparkles, StopCircle } from "lucide-react";
+import { Send, Bot, User, Menu, Sparkles, StopCircle, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatSidebar } from "@/components/chat-sidebar";
@@ -30,6 +30,7 @@ export default function ChatPage() {
         handleSend,
     } = useChat();
 
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const scrollViewportRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const shouldAutoScrollRef = useRef(true);
@@ -121,46 +122,68 @@ export default function ChatPage() {
     return (
         <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background">
             {/* Sidebar Desktop */}
-            <div className="hidden lg:block h-full w-80 border-r border-white/[0.08]">
-                <ChatSidebar
-                    threads={threads}
-                    selectedThreadId={selectedThreadId}
-                    onSelectThread={onSelectThread}
-                    onNewChat={onNewChat}
-                    onDeleteThread={onDeleteThread}
-                    isLoading={isThreadsLoading}
-                    onSearch={handleThreadSearch}
-                    onLoadMore={handleLoadMoreThreads}
-                    hasMore={hasMoreThreads}
-                />
+            <div className={cn(
+                "hidden lg:block h-full border-r border-white/[0.08] transition-[width,opacity] duration-300 ease-in-out shrink-0",
+                isSidebarOpen ? "w-80 opacity-100" : "w-0 opacity-0 overflow-hidden border-none"
+            )}>
+                <div className="w-80 h-full">
+                    <ChatSidebar
+                        threads={threads}
+                        selectedThreadId={selectedThreadId}
+                        onSelectThread={onSelectThread}
+                        onNewChat={onNewChat}
+                        onDeleteThread={onDeleteThread}
+                        isLoading={isThreadsLoading}
+                        onSearch={handleThreadSearch}
+                        onLoadMore={handleLoadMoreThreads}
+                        hasMore={hasMoreThreads}
+                    />
+                </div>
             </div>
 
             {/* Main Chat Area */}
             <div className="flex flex-1 flex-col min-w-0 relative">
-                {/* Mobile Header with Sidebar Toggle */}
-                <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/[0.08] bg-card/80 backdrop-blur-md sticky top-0 z-10">
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-                                <Menu className="h-5 w-5" />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left" className="p-0 border-r border-white/[0.08] w-80 bg-card">
-                            <ChatSidebar
-                                threads={threads}
-                                selectedThreadId={selectedThreadId}
-                                onSelectThread={onSelectThread}
-                                onNewChat={onNewChat}
-                                onDeleteThread={onDeleteThread}
-                                isLoading={isThreadsLoading}
-                                onSearch={handleThreadSearch}
-                                onLoadMore={handleLoadMoreThreads}
-                                hasMore={hasMoreThreads}
-                            />
-                        </SheetContent>
-                    </Sheet>
-                    <span className="font-semibold text-white">Chat</span>
-                    <Button variant="ghost" size="icon" onClick={onNewChat}>
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b border-white/[0.08] bg-card/80 backdrop-blur-md sticky top-0 z-10 transition-all duration-300">
+                    <div className="flex items-center gap-2">
+                        {/* Mobile Sidebar Toggle */}
+                        <div className="lg:hidden">
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
+                                        <Menu className="h-5 w-5" />
+                                    </Button>
+                                </SheetTrigger>
+                                <SheetContent side="left" className="p-0 border-r border-white/[0.08] w-80 bg-card">
+                                    <ChatSidebar
+                                        threads={threads}
+                                        selectedThreadId={selectedThreadId}
+                                        onSelectThread={onSelectThread}
+                                        onNewChat={onNewChat}
+                                        onDeleteThread={onDeleteThread}
+                                        isLoading={isThreadsLoading}
+                                        onSearch={handleThreadSearch}
+                                        onLoadMore={handleLoadMoreThreads}
+                                        hasMore={hasMoreThreads}
+                                    />
+                                </SheetContent>
+                            </Sheet>
+                        </div>
+
+                        {/* Desktop Sidebar Toggle */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="hidden lg:flex text-muted-foreground hover:text-foreground hover:bg-white/10"
+                            title={isSidebarOpen ? "Ocultar histórico" : "Mostrar histórico"}
+                        >
+                            {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+                        </Button>
+                        <span className="font-semibold text-white">Chat</span>
+                    </div>
+
+                    <Button variant="ghost" size="icon" onClick={onNewChat} className="text-muted-foreground hover:text-foreground hover:bg-white/10" title="Nova conversa">
                         <Sparkles className="h-4 w-4 text-primary" />
                     </Button>
                 </div>
@@ -169,9 +192,9 @@ export default function ChatPage() {
                 <div
                     ref={scrollViewportRef}
                     onScroll={handleScroll}
-                    className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth"
+                    className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8 scroll-smooth"
                 >
-                    <div className="mx-auto max-w-3xl space-y-8 pb-32">
+                    <div className="w-full space-y-8 pb-32 transition-all duration-300">
                         {messages.length === 0 && !isLoading ? (
                             <div className="flex min-h-[50vh] flex-col items-center justify-center text-center animate-in fade-in duration-500">
                                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-purple-500/20 shadow-lg shadow-primary/10 ring-1 ring-white/10">
@@ -263,8 +286,8 @@ export default function ChatPage() {
                 </div>
 
                 {/* Input Area */}
-                <div className="absolute bottom-0 left-0 right-0 bg-transparent p-4 lg:p-6 bg-gradient-to-t from-background via-background to-transparent pt-10">
-                    <div className="mx-auto max-w-3xl">
+                <div className="absolute bottom-0 left-0 right-0 bg-transparent p-4 lg:p-8 bg-gradient-to-t from-background via-background to-transparent pt-10">
+                    <div className="w-full transition-all duration-300">
                         <div className="relative flex items-end gap-2 rounded-2xl bg-card/80 p-2 shadow-2xl backdrop-blur-xl border border-white/[0.08] ring-1 ring-white/[0.05] focus-within:ring-primary/30 transition-shadow hover:shadow-primary/5">
                             <Input
                                 ref={inputRef}

@@ -14,7 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
 
                 <main className="flex-1 overflow-y-auto pb-20 md:pb-0 scroll-smooth">
-                    <div className="mx-auto max-w-7xl p-4 lg:p-8 animate-in fade-in duration-500">{children}</div>
+                    <div className="mx-auto p-4 lg:p-8 animate-in fade-in duration-500">{children}</div>
                 </main>
 
                 <MobileNav />
