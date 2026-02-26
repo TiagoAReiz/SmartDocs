@@ -10,11 +10,31 @@ class ChatRequest(BaseModel):
     thread_id: str | None = None
 
 
+class RelevantTable(BaseModel):
+    index: int
+    row: list[str]
+    header: list[str]
+
+
+class ChatDocument(BaseModel):
+    id: str | int  # The document ID
+    filename: str | None = None
+    relevant_field_keys: list[str] = []
+    relevant_tables: list[RelevantTable] = []
+
+
+class StructuredChatResponse(BaseModel):
+    message: str
+    final_query: str | None = None
+    documents: list[ChatDocument] = []
+
+
 class ChatResponse(BaseModel):
     answer: str
     sql_used: str | None = None
     row_count: int = 0
     data: list[dict[str, Any]] = []
+    structured_data: StructuredChatResponse | dict[str, Any] | None = None
     sources: list[dict[str, Any]] = []
     thread_id: str | None = None
 

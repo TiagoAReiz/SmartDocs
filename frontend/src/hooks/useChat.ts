@@ -7,6 +7,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   data?: Record<string, unknown>[];
+  structured_data?: import("@/types").StructuredChatResponse;
   timestamp: Date;
 }
 
@@ -90,6 +91,7 @@ export function useChat() {
           role: "assistant",
           content: msg.answer,
           data: msg.data,
+          structured_data: msg.structured_data,
           timestamp: new Date(msg.created_at),
         });
       });
@@ -151,6 +153,7 @@ export function useChat() {
         role: "assistant",
         content: res.answer,
         data: res.data,
+        structured_data: res.structured_data,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
