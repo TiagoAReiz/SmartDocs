@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
     ColumnDef,
     flexRender,
@@ -31,13 +31,27 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
         pageSize: 5, // default page size
     });
 
-    if (!data || data.length === 0) return null;
+    // Filter out rows that have 'null', 'None', or empty values in any of their columns
+    // Wrapped in useMemo to prevent reference changes on every render, which crashes the table pagination
+    const cleanData = useMemo(() => {
+        return data.filter(row => {
+            return !Object.values(row).some(val =>
+                val === null ||
+                val === undefined ||
+                String(val).trim() === '' ||
+                String(val).toLowerCase() === 'null' ||
+                String(val).toLowerCase() === 'none'
+            );
+        });
+    }, [data]);
 
-    const isSingleItem = data.length === 1;
+    if (!cleanData || cleanData.length === 0) return null;
+
+    const isSingleItem = cleanData.length === 1;
 
     // Single Item View (Card)
     if (isSingleItem) {
-        const item = data[0];
+        const item = cleanData[0];
         return (
             <Card className="mt-4 bg-black/20 border-white/[0.08] overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 bg-white/5 border-b border-white/[0.08] px-4 py-3">
@@ -50,7 +64,7 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onExport(data, `detalhes-${Date.now()}.csv`)}
+                        onClick={() => onExport(cleanData, `detalhes-${Date.now()}.csv`)}
                         className="h-7 text-xs gap-1.5 hover:bg-white/10"
                     >
                         <Download className="h-3.5 w-3.5" />
@@ -79,19 +93,21 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
     }
 
     // Multiple Items View (Table)
-    const columns: ColumnDef<Record<string, unknown>>[] = Object.keys(data[0]).map(
-        (key) => ({
-            accessorKey: key,
-            header: key,
-            cell: ({ row }) => {
-                const val = row.getValue(key);
-                return <div className="min-w-[120px] max-w-[300px] truncate" title={String(val)}>{String(val)}</div>;
-            },
-        })
-    );
+    const columns: ColumnDef<Record<string, unknown>>[] = useMemo(() => {
+        return Object.keys(cleanData[0]).map(
+            (key) => ({
+                accessorKey: key,
+                header: key,
+                cell: ({ row }) => {
+                    const val = row.getValue(key);
+                    return <div className="min-w-[120px] max-w-[300px] truncate" title={String(val)}>{String(val)}</div>;
+                },
+            })
+        );
+    }, [cleanData]);
 
     const table = useReactTable({
-        data,
+        data: cleanData,
         columns,
         getCoreRowModel: getCoreRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
@@ -107,13 +123,13 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
                 <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-primary" />
                     <span className="text-xs font-medium text-foreground/80 uppercase tracking-wider">
-                        {data.length} Resultados Encontrados
+                        {cleanData.length} Resultados Encontrados
                     </span>
                 </div>
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onExport(data, `smartdocs-export-${Date.now()}.csv`)}
+                    onClick={() => onExport(cleanData, `smartdocs-export-${Date.now()}.csv`)}
                     className="h-8 text-xs gap-1.5 bg-transparent border-white/10 hover:bg-white/10 hover:text-foreground transition-colors"
                 >
                     <Download className="h-3.5 w-3.5" />
@@ -121,13 +137,13 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
                 </Button>
             </div>
 
-            <ScrollArea className="w-full max-w-full rounded-b-lg">
+            <ScrollArea className="w-full max-w-full max-h-[350px] rounded-b-lg relative">
                 <Table>
                     <TableHeader className="bg-transparent pointer-events-none">
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id} className="border-white/5 hover:bg-transparent">
                                 {headerGroup.headers.map((header) => (
-                                    <TableHead key={header.id} className="whitespace-nowrap px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider h-10 align-middle">
+                                    <TableHead key={header.id} className="whitespace-nowrap px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider h-10 align-middle sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-white/[0.08]">
                                         {header.isPlaceholder
                                             ? null
                                             : flexRender(
@@ -173,10 +189,10 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
             </ScrollArea>
 
             {/* Pagination Controls */}
-            {data.length > pagination.pageSize && (
+            {cleanData.length > pagination.pageSize && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.08] bg-white/[0.01]">
                     <div className="flex-1 text-xs text-muted-foreground">
-                        Mostrando {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} a {Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, data.length)} de {data.length}
+                        Mostrando {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} a {Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, cleanData.length)} de {cleanData.length}
                     </div>
                     <div className="flex items-center space-x-2">
                         <Button
