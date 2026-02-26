@@ -45,6 +45,31 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
         });
     }, [data]);
 
+    const columns: ColumnDef<Record<string, unknown>>[] = useMemo(() => {
+        if (!cleanData || cleanData.length === 0) return [];
+        return Object.keys(cleanData[0]).map(
+            (key) => ({
+                accessorKey: key,
+                header: key,
+                cell: ({ row }) => {
+                    const val = row.getValue(key);
+                    return <div className="min-w-[120px] max-w-[300px] truncate" title={String(val)}>{String(val)}</div>;
+                },
+            })
+        );
+    }, [cleanData]);
+
+    const table = useReactTable({
+        data: cleanData || [],
+        columns,
+        getCoreRowModel: getCoreRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
+        onPaginationChange: setPagination,
+        state: {
+            pagination,
+        },
+    });
+
     if (!cleanData || cleanData.length === 0) return null;
 
     const isSingleItem = cleanData.length === 1;
@@ -91,31 +116,6 @@ export function ChatDataTable({ data, onExport }: ChatDataTableProps) {
             </Card>
         );
     }
-
-    // Multiple Items View (Table)
-    const columns: ColumnDef<Record<string, unknown>>[] = useMemo(() => {
-        return Object.keys(cleanData[0]).map(
-            (key) => ({
-                accessorKey: key,
-                header: key,
-                cell: ({ row }) => {
-                    const val = row.getValue(key);
-                    return <div className="min-w-[120px] max-w-[300px] truncate" title={String(val)}>{String(val)}</div>;
-                },
-            })
-        );
-    }, [cleanData]);
-
-    const table = useReactTable({
-        data: cleanData,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-        onPaginationChange: setPagination,
-        state: {
-            pagination,
-        },
-    });
 
     return (
         <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.08] bg-black/20 shadow-sm">

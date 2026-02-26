@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     });
                     setToken(savedToken);
                     setUser(res.data);
-                } catch (error) {
+                } catch {
                     localStorage.removeItem("smartdocs_token");
                     localStorage.removeItem("smartdocs_user");
                 } finally {
