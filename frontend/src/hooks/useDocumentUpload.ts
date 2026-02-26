@@ -11,18 +11,18 @@ export interface UploadItem {
   documentId?: number;
 }
 
+const acceptedTypes = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "image/jpeg",
+  "image/png",
+];
+
 export function useDocumentUpload() {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-
-  const acceptedTypes = [
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "image/jpeg",
-    "image/png",
-  ];
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter(
@@ -91,7 +91,7 @@ export function useDocumentUpload() {
     } finally {
       setIsUploading(false);
     }
-  }, [acceptedTypes]);
+  }, []);
 
   useEffect(() => {
     const processingItems = uploads.filter(

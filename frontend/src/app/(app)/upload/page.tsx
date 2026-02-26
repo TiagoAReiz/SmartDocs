@@ -4,23 +4,29 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import api from "@/lib/api";
 import type { UploadResponse } from "@/types";
 import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "@/components/status-badge";
 import {
     CloudUpload,
     FileUp,
-    CheckCircle2,
-    XCircle,
     RefreshCw,
     Loader2,
     File,
     FileText,
     Image as ImageIcon,
-    FileSpreadsheet,
-    FileWarning
+    FileSpreadsheet
 } from "lucide-react";
+
+const acceptedTypes = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "image/jpeg",
+    "image/png",
+];
+
+const acceptedExtensions = ".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png";
 import { toast } from "sonner";
 import type { DocumentStatus } from "@/types";
 import { cn } from "@/lib/utils";
@@ -39,16 +45,6 @@ export default function UploadPage() {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const acceptedTypes = [
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "image/jpeg",
-        "image/png",
-    ];
-
-    const acceptedExtensions = ".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png";
 
     const handleFiles = useCallback(
         async (files: FileList | File[]) => {
@@ -131,7 +127,7 @@ export default function UploadPage() {
                 setIsUploading(false);
             }
         },
-        [acceptedTypes]
+        []
     );
 
     // Poll the status of processing items

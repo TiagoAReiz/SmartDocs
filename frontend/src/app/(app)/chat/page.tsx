@@ -103,12 +103,12 @@ export default function ChatPage() {
                     doc.relevant_tables.forEach((table, tIdx: number) => {
                         if (tIdx > 0) csvContent += "\n";
                         csvContent += table.header.map((h: string) => `"${String(h).replace(/"/g, '""')}"`).join(",") + "\n";
-                        table.row.forEach((row: any) => {
+                        table.row.forEach((row: unknown) => {
                             // Supondo que 'row' aqui seja um array (de fato deveria ser um array de arrays, mas nosso schema tem row: list[str] o que indica uma única linha ou precisamos processar melhor)
                             // Na verdade, se row for string[], são os valores. Se precisarmos de múltiplas rows, o backend deveria emitir 'rows: list[list[str]]'.
                             // Se for array simples, unimos.
                             if (Array.isArray(row)) {
-                                csvContent += row.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(",") + "\n";
+                                csvContent += row.map((val: unknown) => `"${String(val).replace(/"/g, '""')}"`).join(",") + "\n";
                             } else {
                                 csvContent += `"${String(row).replace(/"/g, '""')}"\n`;
                             }
@@ -345,7 +345,7 @@ export default function ChatPage() {
                                                                                     <tbody>
                                                                                         {/* Safety check as backend SQL tool might return rows differently */}
                                                                                         <tr className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                                                                                            {table.row.map((val: any, vIdx: number) => (
+                                                                                            {table.row.map((val: unknown, vIdx: number) => (
                                                                                                 <td key={`td-${vIdx}`} className="px-4 py-2 break-words min-w-[100px] max-w-[200px]">{String(val)}</td>
                                                                                             ))}
                                                                                         </tr>
