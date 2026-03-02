@@ -55,7 +55,11 @@ def create_app() -> FastAPI:
     # CORS
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:5173"],
+        allow_origins=[
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://lemon-glacier-04e92850f.2.azurestaticapps.net",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
