@@ -108,7 +108,7 @@ async def get_document_status(
 ):
     """Get the current background processing status of a document."""
     
-    # Check if document exists and belongs to user (or basic check)
+    # Check if document exists
     result = await db.execute(select(Document).where(Document.id == document_id))
     doc = result.scalar_one_or_none()
     
@@ -323,4 +323,49 @@ async def get_document_file(
         content=file_bytes,
         media_type=doc.mime_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{doc.filename}"'},
+    )
+
+
+from app.core.deps import require_admin
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a document including blob storage and DB records (admin only)."""
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Documento não encontrado",
+        )
+
+    old_data = {
+        "id": str(doc.id),
+        "filename": doc.filename,
+        "status": doc.status,
+    }
+
+    # Remove blob file first
+    if doc.blob_url:
+        await storage_service.delete_blob(doc.blob_url)
+
+    # Cascading DB delete
+    await db.delete(doc)
+    await db.commit()
+
+    AuditService.log_action(
+        background_tasks=background_tasks,
+        get_db_session_factory=async_session,
+        user_id=admin.id,
+        user_email=admin.email,
+        entity_type="DOCUMENT",
+        entity_id=old_data["id"],
+        action_type=ActionType.DELETE,
+        old_values=old_data
     )

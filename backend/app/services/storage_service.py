@@ -107,5 +107,44 @@ class StorageService:
         logger.warning(f"URL de blob inesperada: {blob_url}")
         return self._container_name, unquote(parts[-1]) if parts else ""
 
+    async def delete_blob(self, blob_url: str) -> None:
+        """Deletes a blob from storage or a local file."""
+        if not blob_url:
+            logger.warning("URL do blob vazia, nada a deletar")
+            return
+
+        # Handle local file
+        local_path = Path(blob_url)
+        if local_path.exists():
+            local_path.unlink()
+            logger.info(f"Arquivo local deletado: {local_path}")
+            return
+
+        if blob_url.startswith("file://"):
+            path = Path(blob_url.replace("file://", "", 1))
+            if path.exists():
+                path.unlink()
+                logger.info(f"Arquivo local deletado: {path}")
+            return
+
+        # Handle Azure Blob
+        client = await self._get_client()
+        if client is None:
+            logger.warning(
+                f"Storage não configurado e arquivo local inexistente para deleção: {blob_url}"
+            )
+            return
+
+        try:
+            container_name, blob_name = self._parse_blob_url(blob_url)
+            container_client = client.get_container_client(container_name)
+            blob_client = container_client.get_blob_client(blob_name)
+            
+            await blob_client.delete_blob()
+            logger.info(f"Blob deletado com sucesso: {blob_url}")
+        except Exception as e:
+            logger.error(f"Erro ao deletar blob {blob_url}: {e}")
+            # We don't raise here, to allow DB deletion to proceed even if blob deletion fails
+
 
 storage_service = StorageService()

@@ -116,6 +116,16 @@ export function useDocuments() {
     }
   };
 
+  const handleDelete = async (docId: number) => {
+    try {
+      await documentService.deleteDocument(docId);
+      toast.success("Documento removido com sucesso");
+      mutate();
+    } catch {
+      toast.error("Erro ao remover documento");
+    }
+  };
+
   return {
     documents,
     total,
@@ -134,5 +144,6 @@ export function useDocuments() {
     handleExpand,
     handleDownload,
     handleReprocess,
+    handleDelete,
   };
 }

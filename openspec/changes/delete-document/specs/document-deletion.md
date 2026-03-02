@@ -20,3 +20,10 @@ The system MUST allow administrative users to completely delete a document.
 - **WHEN** a non-admin user requests to delete `doc_123`
 - **THEN** the API responds with a 403 Forbidden error
 - **AND** the document and its associations remain intact
+
+#### Scenario: Delete button UI visibility
+- **GIVEN** a user is on the documents list page
+- **WHEN** the user is an admin
+- **THEN** the delete action button is visible for documents
+- **WHEN** the user is a standard user
+- **THEN** the delete action button is hidden
