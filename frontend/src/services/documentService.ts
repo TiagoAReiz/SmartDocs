@@ -30,6 +30,6 @@ export const documentService = {
     return res.data;
   },
   deleteDocument: async (documentId: number): Promise<void> => {
-    await api.delete(`/admin/documents/${documentId}`);
+    await api.delete(`/documents/${documentId}`);
   }
 };
