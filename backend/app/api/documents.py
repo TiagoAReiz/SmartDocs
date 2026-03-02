@@ -62,7 +62,7 @@ async def upload_documents(
             )
 
         content = await file.read()
-        doc = await save_upload(content, file.filename, current_user.id, db)
+        doc = await save_upload(content, file.filename, db)
         documents.append(doc)
 
     # Commit to get IDs

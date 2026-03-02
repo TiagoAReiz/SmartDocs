@@ -53,6 +53,7 @@ async def create_user(
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    await db.commit()
 
     # Convert User dictionary data ignoring password
     new_data = {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
@@ -114,6 +115,7 @@ async def update_user(
 
     await db.flush()
     await db.refresh(user)
+    await db.commit()
 
     if has_changes:
         new_data = {"name": user.name, "email": user.email, "role": user.role}
@@ -161,6 +163,7 @@ async def delete_user(
     old_data = {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
 
     await db.delete(user)
+    await db.commit()
 
     AuditService.log_action(
         background_tasks=background_tasks,
