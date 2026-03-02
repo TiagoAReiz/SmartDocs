@@ -32,7 +32,7 @@ class User(Base):
     )
 
     # Relationships
-    documents = relationship("Document", back_populates="user", lazy="selectin")
+
     threads = relationship("ChatThread", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
 

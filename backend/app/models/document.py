@@ -27,9 +27,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     original_extension: Mapped[str] = mapped_column(String(20), nullable=False)
     mime_type: Mapped[str | None] = mapped_column(String(100))
@@ -49,7 +47,7 @@ class Document(Base):
     )
 
     # Relationships
-    user = relationship("User", back_populates="documents")
+
     fields = relationship(
         "DocumentField",
         back_populates="document",

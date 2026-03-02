@@ -22,7 +22,6 @@ from app.utils.file_utils import (
 async def save_upload(
     file_content: bytes,
     filename: str,
-    user_id: int,
     db: AsyncSession,
 ) -> Document:
     """
@@ -42,7 +41,6 @@ async def save_upload(
 
     # Create database record
     doc = Document(
-        user_id=user_id,
         filename=filename,
         original_extension=get_extension(filename).lstrip("."),
         mime_type=mime_type,
