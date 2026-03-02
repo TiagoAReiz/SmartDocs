@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import json
 
 from app.core.deps import require_admin
 from app.core.security import hash_password
-from app.database import get_db
+from app.database import get_db, async_session
 from app.models.user import User
 from app.schemas.auth import UserCreate, UserResponse, UserUpdate
+from app.services.audit_service import AuditService
+from app.models.audit_log import ActionType
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -26,6 +29,7 @@ async def list_users(
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: UserCreate,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -50,6 +54,20 @@ async def create_user(
     await db.flush()
     await db.refresh(user)
 
+    # Convert User dictionary data ignoring password
+    new_data = {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
+
+    AuditService.log_action(
+        background_tasks=background_tasks,
+        get_db_session_factory=async_session,
+        user_id=admin.id,
+        user_email=admin.email,
+        entity_type="USER",
+        entity_id=user.id,
+        action_type=ActionType.CREATE,
+        new_values=new_data
+    )
+
     return UserResponse.model_validate(user)
 
 
@@ -57,6 +75,7 @@ async def create_user(
 async def update_user(
     user_id: int,
     body: UserUpdate,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -70,25 +89,48 @@ async def update_user(
             detail="Usuário não encontrado",
         )
 
-    if body.name is not None:
+    old_data = {"name": user.name, "email": user.email, "role": user.role}
+    has_changes = False
+
+    if body.name is not None and body.name != user.name:
         user.name = body.name
-    if body.email is not None:
+        has_changes = True
+    if body.email is not None and body.email != user.email:
         # Check for duplicate email
-        if body.email != user.email:
-            dup_result = await db.execute(select(User).where(User.email == body.email))
-            if dup_result.scalar_one_or_none() is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Email já cadastrado",
-                )
+        dup_result = await db.execute(select(User).where(User.email == body.email))
+        if dup_result.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email já cadastrado",
+            )
         user.email = body.email
-    if body.role is not None:
+        has_changes = True
+    if body.role is not None and body.role != user.role:
         user.role = body.role
+        has_changes = True
     if body.password is not None:
         user.password_hash = hash_password(body.password)
+        has_changes = True
 
     await db.flush()
     await db.refresh(user)
+
+    if has_changes:
+        new_data = {"name": user.name, "email": user.email, "role": user.role}
+        if body.password is not None:
+            new_data["password_changed"] = True
+            
+        AuditService.log_action(
+            background_tasks=background_tasks,
+            get_db_session_factory=async_session,
+            user_id=admin.id,
+            user_email=admin.email,
+            entity_type="USER",
+            entity_id=user.id,
+            action_type=ActionType.UPDATE,
+            old_values=old_data,
+            new_values=new_data
+        )
 
     return UserResponse.model_validate(user)
 
@@ -96,6 +138,7 @@ async def update_user(
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -115,4 +158,17 @@ async def delete_user(
             detail="Usuário não encontrado",
         )
 
+    old_data = {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
+
     await db.delete(user)
+
+    AuditService.log_action(
+        background_tasks=background_tasks,
+        get_db_session_factory=async_session,
+        user_id=admin.id,
+        user_email=admin.email,
+        entity_type="USER",
+        entity_id=old_data["id"],
+        action_type=ActionType.DELETE,
+        old_values=old_data
+    )

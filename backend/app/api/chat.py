@@ -2,13 +2,13 @@ import json
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, delete, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.database import get_db
+from app.database import get_db, async_session
 from app.models.user import User
 from app.models.chat_message import ChatMessage
 from app.models.chat_thread import ChatThread
@@ -20,6 +20,8 @@ from app.schemas.chat import (
     ChatThreadResponse,
 )
 from app.services import chat_service
+from app.services.audit_service import AuditService
+from app.models.audit_log import ActionType
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -29,8 +31,8 @@ async def _get_or_create_thread(
     user_id: int,
     thread_id: str | None,
     first_question: str,
-) -> ChatThread:
-    """Validate existing thread or create a new one."""
+) -> tuple[ChatThread, bool]:
+    """Validate existing thread or create a new one. Returns (thread, is_new)."""
     if thread_id:
         try:
             tid = UUID(thread_id)
@@ -44,7 +46,7 @@ async def _get_or_create_thread(
             
             # Update timestamp
             thread.updated_at = datetime.now(timezone.utc)
-            return thread
+            return thread, False
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid thread_id format")
 
@@ -53,12 +55,13 @@ async def _get_or_create_thread(
     thread = ChatThread(user_id=user_id, title=title)
     db.add(thread)
     await db.flush()  # Generate ID
-    return thread
+    return thread, True
 
 
 @router.post("", response_model=ChatResponse)
 async def send_chat(
     body: ChatRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -66,7 +69,7 @@ async def send_chat(
     is_admin = current_user.role == "admin"
 
     # Handle thread creation/retrieval
-    thread = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
+    thread, is_new = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
     thread_id_str = str(thread.id)
     thread_id_val = thread.id
     user_id_val = current_user.id
@@ -91,6 +94,18 @@ async def send_chat(
     )
     db.add(message)
     await db.commit()
+    
+    if is_new:
+        AuditService.log_action(
+            background_tasks=background_tasks,
+            get_db_session_factory=async_session,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            entity_type="CHAT_THREAD",
+            entity_id=thread_id_val,
+            action_type=ActionType.CREATE,
+            new_values={"title": thread.title}
+        )
 
     return ChatResponse(
         answer=result["answer"],
@@ -104,6 +119,7 @@ async def send_chat(
 @router.post("/stream")
 async def stream_chat(
     body: ChatRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -111,7 +127,7 @@ async def stream_chat(
     is_admin = current_user.role == "admin"
 
     # Handle thread creation/retrieval
-    thread = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
+    thread, is_new = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
     thread_id_str = str(thread.id)
     thread_id_val = thread.id
     user_id_val = current_user.id
@@ -123,6 +139,18 @@ async def stream_chat(
     # Re-fetch thread to be attached to session again if needed, or just use ID.
     # Actually, committing closes the transaction. usage of `thread` object might fail if lazy loading.
     # But we only need `thread.id` for `ChatMessage`.
+    
+    if is_new:
+        AuditService.log_action(
+            background_tasks=background_tasks,
+            get_db_session_factory=async_session,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            entity_type="CHAT_THREAD",
+            entity_id=thread_id_val,
+            action_type=ActionType.CREATE,
+            new_values={"title": thread.title}
+        )
 
     async def event_generator():
         # Send the thread_id as the first event so frontend knows where we are
@@ -254,6 +282,7 @@ async def get_thread_messages(
 @router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_thread(
     thread_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -271,5 +300,18 @@ async def delete_thread(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
 
+    old_data = {"id": str(thread.id), "title": thread.title}
+
     await db.delete(thread)
     await db.commit()
+    
+    AuditService.log_action(
+        background_tasks=background_tasks,
+        get_db_session_factory=async_session,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        entity_type="CHAT_THREAD",
+        entity_id=tid,
+        action_type=ActionType.DELETE,
+        old_values=old_data
+    )

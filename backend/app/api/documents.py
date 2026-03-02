@@ -1,4 +1,5 @@
 import math
+import json
 
 from fastapi import (
     APIRouter,
@@ -6,6 +7,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
     status,
+    BackgroundTasks,
 )
 from fastapi.responses import Response
 from sqlalchemy import func, select
@@ -32,6 +34,8 @@ from app.schemas.document_processing_job import DocumentProcessingJobResponse
 from app.services.document_service import save_upload
 from app.services.storage_service import storage_service
 from app.utils.file_utils import is_supported
+from app.services.audit_service import AuditService
+from app.models.audit_log import ActionType
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -43,6 +47,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 )
 async def upload_documents(
     files: list[UploadFile],
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -62,11 +67,23 @@ async def upload_documents(
 
     # Commit to get IDs
     await db.commit()
-
-    # Schedule background processing by creating Job entries
+    
     for doc in documents:
+        # Schedule background processing by creating Job entries
         job = DocumentProcessingJob(document_id=doc.id, status=JobStatus.PENDING)
         db.add(job)
+        
+        # Audit Log CREATE action for document upload
+        AuditService.log_action(
+            background_tasks=background_tasks,
+            get_db_session_factory=async_session,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            entity_type="DOCUMENT",
+            entity_id=doc.id,
+            action_type=ActionType.CREATE,
+            new_values={"filename": doc.filename, "status": doc.status}
+        )
         
     await db.commit()
 
@@ -125,6 +142,7 @@ async def get_document_status(
 )
 async def reprocess_document(
     document_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -149,6 +167,8 @@ async def reprocess_document(
         )
 
     # Reset status and clear previous extraction data
+    old_data = {"status": doc.status}    
+    
     doc.status = DocumentStatus.UPLOADED
     doc.extracted_text = None
     doc.raw_json = None
@@ -159,6 +179,19 @@ async def reprocess_document(
     job = DocumentProcessingJob(document_id=doc.id, status=JobStatus.PENDING)
     db.add(job)
     await db.commit()
+
+    # Audit Log UPDATE/PROCESS action for document reprocessing
+    AuditService.log_action(
+        background_tasks=background_tasks,
+        get_db_session_factory=async_session,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        entity_type="DOCUMENT",
+        entity_id=doc.id,
+        action_type=ActionType.PROCESS,
+        old_values=old_data,
+        new_values={"status": DocumentStatus.UPLOADED, "reprocessed": True}
+    )
 
     return ReprocessResponse(
         id=doc.id,

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from loguru import logger
 
-from app.api import auth, documents, chat, admin
+from app.api import auth, documents, chat, admin, admin_audit
 from app.core.exceptions import generic_exception_handler
 
 
@@ -69,6 +69,7 @@ def create_app() -> FastAPI:
     application.include_router(documents.router)
     application.include_router(chat.router)
     application.include_router(admin.router)
+    application.include_router(admin_audit.router)
 
     @application.get("/health", tags=["health"])
     async def health_check():
