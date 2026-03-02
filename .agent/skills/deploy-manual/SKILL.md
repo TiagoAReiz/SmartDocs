@@ -37,9 +37,8 @@ cd ..
 
 ### 4. Git Version Control
 If `deploy_manual.bat` is completely successful, you must commit and push the current changes.
-First, check the status and look at the diff to understand what was changed so you can decide on a good commit message:
+First, perform a quick diff to understand what was changed so you can decide on a good commit message:
 ```bash
-git status
 git diff
 ```
 Then, stage the files:

@@ -28,5 +28,8 @@ export const documentService = {
   downloadFile: async (documentId: number): Promise<Blob> => {
     const res = await api.get(`/documents/${documentId}/file`, { responseType: "blob" });
     return res.data;
+  },
+  deleteDocument: async (documentId: number): Promise<void> => {
+    await api.delete(`/admin/documents/${documentId}`);
   }
 };

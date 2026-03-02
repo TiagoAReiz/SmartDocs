@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import React, { Fragment } from "react";
 import { useDocuments } from "@/hooks/useDocuments";
 import type { DocumentDetail } from "@/types";
 import { PageHeader } from "@/components/page-header";
@@ -9,12 +9,20 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/contexts/auth-context";
 import {
     Search,
     ChevronDown,
@@ -28,6 +36,9 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function DocumentsPage() {
+    const { isAdmin } = useAuth();
+    const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+    const [documentToDelete, setDocumentToDelete] = React.useState<DocumentDetail | null>(null);
     const {
         documents,
         total,
@@ -46,6 +57,7 @@ export default function DocumentsPage() {
         handleExpand,
         handleDownload,
         handleReprocess,
+        handleDelete,
     } = useDocuments();
 
     const formatDate = (dateStr: string) => {
@@ -54,6 +66,19 @@ export default function DocumentsPage() {
             month: "2-digit",
             year: "numeric",
         });
+    };
+
+    const confirmDelete = (doc: DocumentDetail) => {
+        setDocumentToDelete(doc);
+        setDeleteDialogOpen(true);
+    };
+
+    const executeDelete = async () => {
+        if (documentToDelete) {
+            await handleDelete(documentToDelete.id);
+            setDeleteDialogOpen(false);
+            setDocumentToDelete(null);
+        }
     };
 
     return (
@@ -265,6 +290,39 @@ export default function DocumentsPage() {
                     </div>
                 )}
             </div>
+
+            {/* Delete confirmation */}
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent className="border-white/[0.08] bg-[#1E293B] text-slate-200 sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-white">
+                            Confirmar Exclusão
+                        </DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-slate-400">
+                        Tem certeza que deseja remover o documento{" "}
+                        <span className="font-medium text-slate-200">
+                            {documentToDelete?.filename}
+                        </span>
+                        ? Esta ação não pode ser desfeita e removerá todos os dados extraídos.
+                    </p>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteDialogOpen(false)}
+                            className="border-white/[0.1] text-slate-300 hover:bg-white/[0.04]"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={executeDelete}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                        >
+                            Remover
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -275,13 +333,15 @@ function ExpandedDocumentDetail({
     loading,
     previewUrl,
     onDownload,
-    onReprocess
+    onReprocess,
+    onDelete
 }: {
     detail: DocumentDetail | null;
     loading: boolean;
     previewUrl: string | null;
     onDownload: () => void;
     onReprocess: () => void;
+    onDelete?: () => void;
 }) {
     if (loading) {
         return (
@@ -300,6 +360,11 @@ function ExpandedDocumentDetail({
                 <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-foreground">Preview</h4>
                     <div className="flex gap-2">
+                        {onDelete && (
+                            <Button variant="ghost" size="sm" onClick={onDelete} className="h-8 text-xs hover:bg-red-500/10 text-red-500">
+                                Remover
+                            </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={onDownload} className="h-8 text-xs hover:bg-white/10">
                             <Download className="mr-2 h-3 w-3" /> Baixar
                         </Button>
