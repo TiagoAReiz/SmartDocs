@@ -11,7 +11,7 @@ from sqlalchemy import (
     JSON,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
 from app.models.base import Base
 
@@ -46,7 +46,10 @@ class DocumentProcessingJob(Base):
     )
 
     # Relationships
-    document = relationship("Document", backref="processing_job", uselist=False)
+    document = relationship(
+        "Document",
+        backref=backref("processing_jobs", cascade="all, delete-orphan")
+    )
 
     def __repr__(self) -> str:
         return f"<DocumentProcessingJob id={self.id} document_id={self.document_id} status={self.status}>"

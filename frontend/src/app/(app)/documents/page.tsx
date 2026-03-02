@@ -172,6 +172,7 @@ export default function DocumentsPage() {
                                             previewUrl={previewUrl}
                                             onDownload={() => detail && handleDownload(detail)}
                                             onReprocess={() => detail && handleReprocess(detail.id)}
+                                            onDelete={isAdmin ? () => detail && confirmDelete(detail) : undefined}
                                         />
                                     </div>
                                 )}
@@ -236,6 +237,7 @@ export default function DocumentsPage() {
                                                                 previewUrl={previewUrl}
                                                                 onDownload={() => detail && handleDownload(detail)}
                                                                 onReprocess={() => detail && handleReprocess(detail.id)}
+                                                                onDelete={isAdmin ? () => detail && confirmDelete(detail) : undefined}
                                                             />
                                                         </div>
                                                     </td>
