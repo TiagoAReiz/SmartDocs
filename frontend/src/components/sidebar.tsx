@@ -10,6 +10,7 @@ import {
     Users,
     LogOut,
     Sparkles,
+    ActivitySquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +21,8 @@ const navItems = [
 ];
 
 const adminItems = [
-    { href: "/admin/users", label: "Administração", icon: Users },
+    { href: "/admin/users", label: "Usuários", icon: Users },
+    { href: "/admin/audit", label: "Auditoria", icon: ActivitySquare },
 ];
 
 export function Sidebar() {
