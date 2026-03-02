@@ -357,7 +357,7 @@ function ExpandedDocumentDetail({
 
     return (
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            {/* Preview Section */}
+            {/* Previeww Section */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-foreground">Preview</h4>
