@@ -48,6 +48,7 @@ def ensure_upload_dir(upload_dir: str) -> Path:
 def safe_filename(filename: str) -> str:
     """Sanitize a filename for safe storage."""
     import re
+
     # Keep only the basename
     name = os.path.basename(filename)
     # Replace spaces with underscores

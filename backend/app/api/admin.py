@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import json
 
 from app.core.deps import require_admin
 from app.core.security import hash_password
@@ -56,7 +55,12 @@ async def create_user(
     await db.commit()
 
     # Convert User dictionary data ignoring password
-    new_data = {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
+    new_data = {
+        "id": str(user.id),
+        "name": user.name,
+        "email": user.email,
+        "role": user.role,
+    }
 
     AuditService.log_action(
         background_tasks=background_tasks,
@@ -66,7 +70,7 @@ async def create_user(
         entity_type="USER",
         entity_id=user.id,
         action_type=ActionType.CREATE,
-        new_values=new_data
+        new_values=new_data,
     )
 
     return UserResponse.model_validate(user)
@@ -121,7 +125,7 @@ async def update_user(
         new_data = {"name": user.name, "email": user.email, "role": user.role}
         if body.password is not None:
             new_data["password_changed"] = True
-            
+
         AuditService.log_action(
             background_tasks=background_tasks,
             get_db_session_factory=async_session,
@@ -131,7 +135,7 @@ async def update_user(
             entity_id=user.id,
             action_type=ActionType.UPDATE,
             old_values=old_data,
-            new_values=new_data
+            new_values=new_data,
         )
 
     return UserResponse.model_validate(user)
@@ -160,7 +164,12 @@ async def delete_user(
             detail="Usuário não encontrado",
         )
 
-    old_data = {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role}
+    old_data = {
+        "id": str(user.id),
+        "name": user.name,
+        "email": user.email,
+        "role": user.role,
+    }
 
     await db.delete(user)
     await db.commit()
@@ -173,5 +182,5 @@ async def delete_user(
         entity_type="USER",
         entity_id=old_data["id"],
         action_type=ActionType.DELETE,
-        old_values=old_data
+        old_values=old_data,
     )

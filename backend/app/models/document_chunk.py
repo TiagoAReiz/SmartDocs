@@ -26,17 +26,19 @@ class DocumentChunk(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    
+
     search_vector = mapped_column(
         TSVECTOR,
-        server_default=func.to_tsvector('portuguese', func.coalesce('content', '')),
+        server_default=func.to_tsvector("portuguese", func.coalesce("content", "")),
         # Generates tsvector automatically when content changes.
         # SQLAlchemy server_default mapped to GENERATED ALWAYS AS
         # Note: alembic autogenerate might need adjustment for COMPUTED AS, we'll manually fix the migration
     )
 
     __table_args__ = (
-        Index("ix_document_chunks_search_vector", "search_vector", postgresql_using="gin"),
+        Index(
+            "ix_document_chunks_search_vector", "search_vector", postgresql_using="gin"
+        ),
     )
 
     # Relationships

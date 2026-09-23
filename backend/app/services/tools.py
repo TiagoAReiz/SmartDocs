@@ -14,7 +14,6 @@ from loguru import logger
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import engine
 from app.services.sql_guard import validate_sql, SQLGuardError
 
@@ -185,9 +184,7 @@ def make_database_query_tool(
         # Clean up markdown code blocks if the model wraps the SQL
         if sql.startswith("```"):
             lines = sql.split("\n")
-            sql = "\n".join(
-                lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
-            )
+            sql = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
             sql = sql.strip()
 
         logger.info(f"[Tool database_query] SQL gerado: {sql[:200]}")
@@ -196,9 +193,7 @@ def make_database_query_tool(
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                validated_sql = validate_sql(
-                    sql, user_id=user_id, is_admin=is_admin
-                )
+                validated_sql = validate_sql(sql, user_id=user_id, is_admin=is_admin)
                 break
             except SQLGuardError as e:
                 if attempt < max_retries:
@@ -220,9 +215,7 @@ def make_database_query_tool(
                     if sql.startswith("```"):
                         lines = sql.split("\n")
                         sql = "\n".join(
-                            lines[1:-1]
-                            if lines[-1].strip() == "```"
-                            else lines[1:]
+                            lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
                         )
                         sql = sql.strip()
                 else:
@@ -260,19 +253,21 @@ def make_database_query_tool(
                     mapped[col] = str(val)
             data.append(mapped)
 
-        results_text = "\n".join(
-            [str(row) for row in data[:20]]
-        )
+        results_text = "\n".join([str(row) for row in data[:20]])
         if row_count > 20:
             results_text += f"\n... e mais {row_count - 20} linhas"
 
         # Capture raw data via callback if provided
         if on_data_callback:
-            logger.info(f"[Tool database_query] Executando callback com {len(data)} linhas")
+            logger.info(
+                f"[Tool database_query] Executando callback com {len(data)} linhas"
+            )
             try:
                 on_data_callback(data)
             except Exception as e:
-                logger.error(f"[Tool database_query] Erro ao executar callback de dados: {e}")
+                logger.error(
+                    f"[Tool database_query] Erro ao executar callback de dados: {e}"
+                )
 
         return (
             f"Resultados ({row_count} linhas):\n{results_text}\n"

@@ -1,8 +1,8 @@
 from typing import Dict, Any, Optional
-from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import BackgroundTasks
 from app.models.audit_log import AuditLog, ActionType
+
 
 class AuditService:
     @staticmethod
@@ -15,11 +15,11 @@ class AuditService:
         action_type: ActionType,
         old_values: Optional[Dict[str, Any]] = None,
         new_values: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ):
         """Internal asynchronous method to save the log entry to the database."""
-        # Note: the db session provided to BackgroundTasks must be an independent 
-        # session object created specifically for the background task to avoid 
+        # Note: the db session provided to BackgroundTasks must be an independent
+        # session object created specifically for the background task to avoid
         # Transaction context errors after the original Request finishes.
         try:
             audit_log = AuditLog(
@@ -30,13 +30,14 @@ class AuditService:
                 action_type=action_type,
                 old_values=old_values,
                 new_values=new_values,
-                ip_address=ip_address
+                ip_address=ip_address,
             )
             db.add(audit_log)
             await db.commit()
         except Exception as e:
             # We don't want Audit errors to crash the system, but we should log them.
             import logging
+
             logging.error(f"Failed to insert audit log: {str(e)}")
             await db.rollback()
         finally:
@@ -53,7 +54,7 @@ class AuditService:
         action_type: ActionType,
         old_values: Optional[Dict[str, Any]] = None,
         new_values: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
     ):
         """
         Dispatches the audit logging work to a FastAPI BackgroundTask.
@@ -63,7 +64,7 @@ class AuditService:
         # Create a new session specifically for this background task
         # since the main request session will be closed by FastAPI.
         db_session = get_db_session_factory()
-        
+
         background_tasks.add_task(
             AuditService._insert_audit_log,
             db=db_session,
@@ -74,5 +75,5 @@ class AuditService:
             action_type=action_type,
             old_values=old_values,
             new_values=new_values,
-            ip_address=ip_address
+            ip_address=ip_address,
         )

@@ -5,21 +5,24 @@ Uses a ReAct agent that decides autonomously when to query the database
 versus responding directly (e.g. greetings, general questions).
 """
 
-import json
 from typing import Any, AsyncIterator
 from uuid import UUID
 
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import AzureChatOpenAI
 from langgraph.prebuilt import create_react_agent
-from typing import Any, AsyncIterator, Callable, Optional
+from typing import Callable, Optional
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.chat_message import ChatMessage
-from app.services.tools import make_database_query_tool, make_get_schema_tool, _fetch_db_schema
+from app.services.tools import (
+    make_database_query_tool,
+    make_get_schema_tool,
+    _fetch_db_schema,
+)
 from app.services.rag_tool import make_rag_search_tool
 
 
@@ -80,8 +83,6 @@ JOIN documents d ON dt.document_id = d.id WHERE d.id = X
 """
 
 
-
-
 def _openai_ready() -> bool:
     return bool(
         settings.AZURE_OPENAI_ENDPOINT
@@ -123,7 +124,9 @@ async def _create_agent(
         make_get_schema_tool(schema),
         make_rag_search_tool(db, user_id, is_admin),
     ]
-    logger.info(f"[Agent] Ferramentas disponíveis: database_query, get_database_schema, rag_search")
+    logger.info(
+        "[Agent] Ferramentas disponíveis: database_query, get_database_schema, rag_search"
+    )
 
     agent = create_react_agent(
         llm,
@@ -154,19 +157,21 @@ async def _get_thread_history(db: AsyncSession, thread_id: str | None) -> list[A
             history.append(HumanMessage(content=msg.question))
 
             # Resumo automático do AI para economizar tokens na memória do chat
-            is_last_message = (i == total_messages - 1)
-            
+            is_last_message = i == total_messages - 1
+
             # Se não é a última mensagem, e ela gerou dezenas de linhas no SQL ou tem mais de 500 chars (muitas vezes tabelas renderizadas), nós a encurtamos
             if not is_last_message and (msg.row_count > 0 or len(msg.answer) > 500):
                 if msg.row_count > 0:
                     summary = f"[Resumo de contexto AI: O sistema retornou uma tabela com {msg.row_count} linhas nesta iteração. Resposta truncada para economizar tokens.]"
                 else:
-                    summary = f"[Resumo de contexto AI: Resposta textual muito longa do assistente omitida nesta iteração para economizar tokens.]"
+                    summary = "[Resumo de contexto AI: Resposta textual muito longa do assistente omitida nesta iteração para economizar tokens.]"
                 history.append(AIMessage(content=summary))
             else:
                 history.append(AIMessage(content=msg.answer))
 
-        logger.info(f"[Chat] Histórico carregado: {len(messages)} pares de mensagens da thread {thread_id}")
+        logger.info(
+            f"[Chat] Histórico carregado: {len(messages)} pares de mensagens da thread {thread_id}"
+        )
         return history
     except Exception as e:
         logger.error(f"[Chat] Erro ao carregar histórico da thread {thread_id}: {e}")
@@ -189,18 +194,19 @@ async def chat(
     Returns:
         Dict with answer, sql_used, row_count, data, structured_data
     """
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
     logger.info(f"[Chat] Nova pergunta de user_id={user_id} (admin={is_admin})")
     logger.info(f"[Chat] Pergunta: {question[:200]}")
     if thread_id:
         logger.info(f"[Chat] Thread ID: {thread_id}")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
     try:
         data: list[dict[str, Any]] = []
         documents_map: dict[str, dict[str, Any]] = {}
 
         logger.info("[Chat] Criando agente principal (Fase 1)...")
+
         # Callback to capture data from tools
         def on_data(rows: list[dict[str, Any]]):
             # Use extend to modify the list in-place, avoiding scope issues
@@ -214,7 +220,7 @@ async def chat(
                             "id": doc_id,
                             "filename": row.get("filename"),
                             "sql_fields": [],
-                            "sql_tables": []
+                            "sql_tables": [],
                         }
                     # We could try to infer if it's a field or table here or simply pass everything we found
                     documents_map[doc_id]["sql_fields"].append(row)
@@ -224,7 +230,7 @@ async def chat(
 
         # Load history if thread_id is provided
         history = await _get_thread_history(db, thread_id)
-        
+
         # Combine history with current question
         input_messages = history + [HumanMessage(content=question)]
 
@@ -262,14 +268,20 @@ async def chat(
                             f"com args: {str(tool_args)[:200]}"
                         )
                 else:
-                    content_preview = str(msg.content)[:150] if msg.content else "(vazio)"
+                    content_preview = (
+                        str(msg.content)[:150] if msg.content else "(vazio)"
+                    )
                     logger.info(f"[Chat] Msg {i}: 🤖 AI — {content_preview}")
 
             elif msg_type == "tool":
                 tool_name = getattr(msg, "name", "unknown")
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                content = (
+                    msg.content if isinstance(msg.content, str) else str(msg.content)
+                )
                 content_preview = content[:300]
-                logger.info(f"[Chat] Msg {i}: 🔧 Tool '{tool_name}' retornou: {content_preview}")
+                logger.info(
+                    f"[Chat] Msg {i}: 🔧 Tool '{tool_name}' retornou: {content_preview}"
+                )
 
                 if "SQL usado:" in content:
                     sql_parts = content.split("SQL usado:")
@@ -277,7 +289,9 @@ async def chat(
                         sql_used = sql_parts[-1].strip()
                 if "Resultados (" in content:
                     try:
-                        count_str = content.split("Resultados (")[1].split(" linhas)")[0]
+                        count_str = content.split("Resultados (")[1].split(" linhas)")[
+                            0
+                        ]
                         row_count = int(count_str)
                     except (IndexError, ValueError):
                         pass
@@ -293,14 +307,16 @@ async def chat(
             answer = "Desculpe, não consegui processar sua pergunta."
 
         # Summary log Fase 1
-        logger.info(f"{'─'*60}")
-        logger.info(f"[Chat] ✅ Resumo da execução (Fase 1):")
-        logger.info(f"[Chat]   Tools usados: {tools_used if tools_used else 'nenhum (resposta direta)'}")
+        logger.info(f"{'─' * 60}")
+        logger.info("[Chat] ✅ Resumo da execução (Fase 1):")
+        logger.info(
+            f"[Chat]   Tools usados: {tools_used if tools_used else 'nenhum (resposta direta)'}"
+        )
         logger.info(f"[Chat]   SQL usado: {'sim' if sql_used else 'não'}")
         logger.info(f"[Chat]   Linhas SQL: {row_count}")
         logger.info(f"[Chat]   Tamanho resposta: {len(answer)} chars")
         logger.info(f"[Chat]   Resposta raw: {answer[:200]}")
-        logger.info(f"{'─'*60}")
+        logger.info(f"{'─' * 60}")
 
         # ==== PHASE 2: STRUCTURED OUTPUT ====
         logger.info("[Chat] Iniciando Fase 2 (Processamento Estruturado)...")
@@ -308,32 +324,43 @@ async def chat(
         try:
             from app.schemas.chat import StructuredChatResponse
             from langchain_core.prompts import ChatPromptTemplate
-            
+
             structured_llm = _get_llm().with_structured_output(StructuredChatResponse)
-            
-            phase2_prompt = ChatPromptTemplate.from_messages([
-                ("system", 
-                 "Você é um analisador de dados estrito. Sua ÚNICA tarefa é converter a "
-                 "resposta final e os dados encontrados na Fase 1 em um objeto JSON exato.\n\n"
-                 "Mapeie os documentos referenciados, os campos relevantes e as tabelas "
-                 "apenas formatando o que foi extraído pelas ferramentas.\n"
-                 "🚨 REGRA CRÍTICA PARA 'message': Você DEVE copiar a 'raw_answer' EXATAMENTE como ela é. "
-                 "NUNCA resuma, nunca corte, nunca remova detalhes. A chave `message` deve ser uma cópia integral do texto passado.\n\n"
-                 "Aqui estão os documentos extraídos do banco de dados na Fase 1:\n{documents_meta}"),
-                ("human", "Pergunta original do usuário: {question}\n\nResposta RAW da Fase 1:\n{raw_answer}")
-            ])
-            
+
+            phase2_prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        "Você é um analisador de dados estrito. Sua ÚNICA tarefa é converter a "
+                        "resposta final e os dados encontrados na Fase 1 em um objeto JSON exato.\n\n"
+                        "Mapeie os documentos referenciados, os campos relevantes e as tabelas "
+                        "apenas formatando o que foi extraído pelas ferramentas.\n"
+                        "🚨 REGRA CRÍTICA PARA 'message': Você DEVE copiar a 'raw_answer' EXATAMENTE como ela é. "
+                        "NUNCA resuma, nunca corte, nunca remova detalhes. A chave `message` deve ser uma cópia integral do texto passado.\n\n"
+                        "Aqui estão os documentos extraídos do banco de dados na Fase 1:\n{documents_meta}",
+                    ),
+                    (
+                        "human",
+                        "Pergunta original do usuário: {question}\n\nResposta RAW da Fase 1:\n{raw_answer}",
+                    ),
+                ]
+            )
+
             chain = phase2_prompt | structured_llm
-            structured_data = await chain.ainvoke({
-                "question": question,
-                "raw_answer": answer,
-                "documents_meta": str(documents_map) if documents_map else "Nenhum documento retornado diretamente via ferramenta SQL."
-            })
-            
+            structured_data = await chain.ainvoke(
+                {
+                    "question": question,
+                    "raw_answer": answer,
+                    "documents_meta": str(documents_map)
+                    if documents_map
+                    else "Nenhum documento retornado diretamente via ferramenta SQL.",
+                }
+            )
+
             if structured_data:
                 # Force fallback override to guarantee phase 1 length representation bypassing strict JSON token culling
                 structured_data.message = answer
-                logger.info(f"[Chat] Fase 2 concluída com sucesso. Message mapeada.")
+                logger.info("[Chat] Fase 2 concluída com sucesso. Message mapeada.")
                 # We overwrite the raw answer with the structured message for cleaner frontend display
                 answer = structured_data.message
             else:
@@ -342,20 +369,21 @@ async def chat(
         except Exception as e:
             logger.error(f"[Chat] Falha na Fase 2 (Structured Output): {e}")
             from app.schemas.chat import StructuredChatResponse
+
             # Fallback
             structured_data = StructuredChatResponse(
-                message=answer,
-                final_query=sql_used,
-                documents=[]
+                message=answer, final_query=sql_used, documents=[]
             )
 
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
         return {
             "answer": answer,
             "sql_used": sql_used,
             "row_count": row_count,
             "data": data,
-            "structured_data": structured_data.model_dump() if structured_data else None
+            "structured_data": structured_data.model_dump()
+            if structured_data
+            else None,
         }
 
     except OpenAIUnavailableError as e:
@@ -365,7 +393,7 @@ async def chat(
             "sql_used": None,
             "row_count": 0,
             "data": [],
-            "structured_data": None
+            "structured_data": None,
         }
     except Exception as e:
         logger.error(f"Erro no chat agent: {e}")
@@ -383,7 +411,7 @@ async def chat(
             "sql_used": None,
             "row_count": 0,
             "data": [],
-            "structured_data": None
+            "structured_data": None,
         }
 
 
@@ -424,7 +452,7 @@ async def chat_stream(
                             "id": doc_id,
                             "filename": row.get("filename"),
                             "sql_fields": [],
-                            "sql_tables": []
+                            "sql_tables": [],
                         }
                     documents_map[doc_id]["sql_fields"].append(row)
 
@@ -466,12 +494,18 @@ async def chat_stream(
                         sql_used = sql_parts[-1].strip()
                 if "Resultados (" in output_str:
                     try:
-                        count_str = output_str.split("Resultados (")[1].split(" linhas)")[0]
+                        count_str = output_str.split("Resultados (")[1].split(
+                            " linhas)"
+                        )[0]
                         row_count = int(count_str)
                     except (IndexError, ValueError):
                         pass
 
-                yield {"type": "tool_end", "name": tool_name, "content": output_str[:500]}
+                yield {
+                    "type": "tool_end",
+                    "name": tool_name,
+                    "content": output_str[:500],
+                }
 
         # ==== PHASE 2: STRUCTURED OUTPUT ====
         logger.info("[Chat Stream] Iniciando Fase 2 (Processamento Estruturado)...")
@@ -479,28 +513,39 @@ async def chat_stream(
         try:
             from app.schemas.chat import StructuredChatResponse
             from langchain_core.prompts import ChatPromptTemplate
-            
+
             structured_llm = _get_llm().with_structured_output(StructuredChatResponse)
-            
-            phase2_prompt = ChatPromptTemplate.from_messages([
-                ("system", 
-                 "Você é um analisador de dados estrito. Sua ÚNICA tarefa é converter a "
-                 "resposta final e os dados encontrados na Fase 1 em um objeto JSON exato.\n\n"
-                 "Mapeie os documentos referenciados, os campos relevantes e as tabelas "
-                 "apenas formatando o que foi extraído pelas ferramentas.\n"
-                 "🚨 REGRA CRÍTICA PARA 'message': Você DEVE copiar a 'raw_answer' EXATAMENTE como ela é. "
-                 "NUNCA resuma, nunca corte, nunca remova detalhes. A chave `message` deve ser uma cópia integral do texto passado.\n\n"
-                 "Aqui estão os documentos extraídos do banco de dados na Fase 1:\n{documents_meta}"),
-                ("human", "Pergunta original do usuário: {question}\n\nResposta RAW da Fase 1:\n{raw_answer}")
-            ])
-            
+
+            phase2_prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        "Você é um analisador de dados estrito. Sua ÚNICA tarefa é converter a "
+                        "resposta final e os dados encontrados na Fase 1 em um objeto JSON exato.\n\n"
+                        "Mapeie os documentos referenciados, os campos relevantes e as tabelas "
+                        "apenas formatando o que foi extraído pelas ferramentas.\n"
+                        "🚨 REGRA CRÍTICA PARA 'message': Você DEVE copiar a 'raw_answer' EXATAMENTE como ela é. "
+                        "NUNCA resuma, nunca corte, nunca remova detalhes. A chave `message` deve ser uma cópia integral do texto passado.\n\n"
+                        "Aqui estão os documentos extraídos do banco de dados na Fase 1:\n{documents_meta}",
+                    ),
+                    (
+                        "human",
+                        "Pergunta original do usuário: {question}\n\nResposta RAW da Fase 1:\n{raw_answer}",
+                    ),
+                ]
+            )
+
             chain = phase2_prompt | structured_llm
-            structured_data = await chain.ainvoke({
-                "question": question,
-                "raw_answer": full_answer,
-                "documents_meta": str(documents_map) if documents_map else "Nenhum documento retornado diretamente via ferramenta SQL."
-            })
-            
+            structured_data = await chain.ainvoke(
+                {
+                    "question": question,
+                    "raw_answer": full_answer,
+                    "documents_meta": str(documents_map)
+                    if documents_map
+                    else "Nenhum documento retornado diretamente via ferramenta SQL.",
+                }
+            )
+
             if structured_data:
                 # Force fallback override to guarantee phase 1 length representation bypassing strict JSON token culling
                 structured_data.message = full_answer
@@ -509,7 +554,10 @@ async def chat_stream(
         except Exception as e:
             logger.error(f"[Chat Stream] Falha na Fase 2: {e}")
             from app.schemas.chat import StructuredChatResponse
-            structured_data = StructuredChatResponse(message=full_answer, final_query=sql_used, documents=[])
+
+            structured_data = StructuredChatResponse(
+                message=full_answer, final_query=sql_used, documents=[]
+            )
 
         yield {
             "type": "done",
@@ -517,7 +565,9 @@ async def chat_stream(
             "sql_used": sql_used,
             "row_count": row_count,
             "data": data,
-            "structured_data": structured_data.model_dump() if structured_data else None
+            "structured_data": structured_data.model_dump()
+            if structured_data
+            else None,
         }
 
     except OpenAIUnavailableError as e:

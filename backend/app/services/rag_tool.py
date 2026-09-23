@@ -63,7 +63,9 @@ def make_rag_search_tool(
             # Step 1: Generate embedding for the query
             logger.info("[Tool rag_search] Gerando embedding da query...")
             query_embedding = await generate_single_embedding(query)
-            logger.info(f"[Tool rag_search] Embedding gerado ({len(query_embedding)} dimensões)")
+            logger.info(
+                f"[Tool rag_search] Embedding gerado ({len(query_embedding)} dimensões)"
+            )
 
             # Step 2: Build filtered similarity search query
             embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
@@ -83,13 +85,15 @@ def make_rag_search_tool(
                     # Cleanup input like "[1, 2]" or "1, 2"
                     clean_ids = document_ids.replace("[", "").replace("]", "")
                     ids = [int(x.strip()) for x in clean_ids.split(",") if x.strip()]
-                    
+
                     if ids:
                         placeholders = ",".join(str(i) for i in ids)
                         base_where_clauses.append(f"dc.document_id IN ({placeholders})")
                         logger.info(f"[Tool rag_search] Filtro por document_ids: {ids}")
                 except ValueError:
-                    logger.warning(f"[Tool rag_search] document_ids inválidos: {document_ids} (ignorando filtro)")
+                    logger.warning(
+                        f"[Tool rag_search] document_ids inválidos: {document_ids} (ignorando filtro)"
+                    )
 
             # Filter by explicit filename
             if filename and filename.strip():
@@ -100,11 +104,11 @@ def make_rag_search_tool(
             # Helper to execute query using Hybrid RRF
             async def execute_query(clauses, limit=10, use_threshold=True):
                 where_sql = " AND ".join(clauses)
-                
+
                 # RRF Formula constants
                 # For more strict or relaxed ranks, change k.
                 k = 60
-                
+
                 # Build the robust Hybrid Query
                 sql = sql_text(f"""
                     WITH vector_search AS (
@@ -159,21 +163,32 @@ def make_rag_search_tool(
                 # We need to add 'exact_query' to params just before execution
                 exec_params = params.copy()
                 exec_params["exact_query"] = query
-                
+
                 result = await db.execute(sql, exec_params)
                 return result.fetchall()
 
             # 1. Try Strict Search (Threshold applied inside CTE)
             strict_clauses = base_where_clauses
             rows = await execute_query(strict_clauses, use_threshold=True)
-            logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks (Busca Híbrida RRF)")
+            logger.info(
+                f"[Tool rag_search] Encontrados {len(rows)} chunks (Busca Híbrida RRF)"
+            )
 
             # 2. Fallback: Relaxed Search (if filtered by ID or filename and no results)
-            is_filtered = bool((document_ids and document_ids.strip()) or (filename and filename.strip()))
+            is_filtered = bool(
+                (document_ids and document_ids.strip())
+                or (filename and filename.strip())
+            )
             if not rows and is_filtered:
-                logger.info("[Tool rag_search] Fallback: Buscando sem threshold de similaridade nos documentos filtrados...")
-                rows = await execute_query(base_where_clauses, limit=5, use_threshold=False)
-                logger.info(f"[Tool rag_search] Encontrados {len(rows)} chunks no fallback (Busca Híbrida)")
+                logger.info(
+                    "[Tool rag_search] Fallback: Buscando sem threshold de similaridade nos documentos filtrados..."
+                )
+                rows = await execute_query(
+                    base_where_clauses, limit=5, use_threshold=False
+                )
+                logger.info(
+                    f"[Tool rag_search] Encontrados {len(rows)} chunks no fallback (Busca Híbrida)"
+                )
 
             if not rows:
                 filter_desc = ""
@@ -182,7 +197,7 @@ def make_rag_search_tool(
                 if filename:
                     filter_desc += f" (arquivo '{filename}')"
                 logger.info("[Tool rag_search] Nenhum chunk relevante encontrado")
-                
+
                 # ReAct Behavioral Guardrail: If they used document_ids and failed, it's 99% a hallucination.
                 if document_ids:
                     return (
@@ -192,7 +207,7 @@ def make_rag_search_tool(
                         f"FAÇA UMA NOVA CHAMADA para 'rag_search' AGORA, deixando 'document_ids' VAZIO e usando o parâmetro 'filename' "
                         f"com o nome do arquivo que você quer resumir."
                     )
-                
+
                 return f"Nenhum trecho relevante encontrado{filter_desc} nos documentos processados."
 
             # Step 3: Format results with context
@@ -202,9 +217,9 @@ def make_rag_search_tool(
             for i, row in enumerate(rows, 1):
                 similarity = 1 - row.distance
                 section_label = row.section_type or "texto"
-                
+
                 unique_docs.add(f"{row.filename} (ID:{row.document_id})")
-                
+
                 chunks_text.append(
                     f"--- Trecho {i} (Documento: {row.filename} [ID:{row.document_id}], "
                     f"Seção: {section_label}, "

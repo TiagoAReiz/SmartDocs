@@ -1,5 +1,4 @@
 import math
-import json
 
 from fastapi import (
     APIRouter,
@@ -14,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
 from app.database import get_db, async_session
 from app.models.document import Document, DocumentStatus
 from app.models.document_processing_job import DocumentProcessingJob, JobStatus
@@ -67,12 +66,12 @@ async def upload_documents(
 
     # Commit to get IDs
     await db.commit()
-    
+
     for doc in documents:
         # Schedule background processing by creating Job entries
         job = DocumentProcessingJob(document_id=doc.id, status=JobStatus.PENDING)
         db.add(job)
-        
+
         # Audit Log CREATE action for document upload
         AuditService.log_action(
             background_tasks=background_tasks,
@@ -82,9 +81,9 @@ async def upload_documents(
             entity_type="DOCUMENT",
             entity_id=doc.id,
             action_type=ActionType.CREATE,
-            new_values={"filename": doc.filename, "status": doc.status}
+            new_values={"filename": doc.filename, "status": doc.status},
         )
-        
+
     await db.commit()
 
     return DocumentUploadResponse(
@@ -107,17 +106,16 @@ async def get_document_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Get the current background processing status of a document."""
-    
+
     # Check if document exists
     result = await db.execute(select(Document).where(Document.id == document_id))
     doc = result.scalar_one_or_none()
-    
+
     if doc is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Documento não encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado"
         )
-        
+
     job_result = await db.execute(
         select(DocumentProcessingJob)
         .where(DocumentProcessingJob.document_id == document_id)
@@ -125,13 +123,13 @@ async def get_document_status(
         .limit(1)
     )
     job = job_result.scalar_one_or_none()
-    
+
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Nenhum job de processamento encontrado para este documento"
+            detail="Nenhum job de processamento encontrado para este documento",
         )
-        
+
     return DocumentProcessingJobResponse.model_validate(job)
 
 
@@ -167,14 +165,14 @@ async def reprocess_document(
         )
 
     # Reset status and clear previous extraction data
-    old_data = {"status": doc.status}    
-    
+    old_data = {"status": doc.status}
+
     doc.status = DocumentStatus.UPLOADED
     doc.extracted_text = None
     doc.raw_json = None
     doc.error_message = None
     doc.page_count = None
-    
+
     # Enqueue a new Job
     job = DocumentProcessingJob(document_id=doc.id, status=JobStatus.PENDING)
     db.add(job)
@@ -190,7 +188,7 @@ async def reprocess_document(
         entity_id=doc.id,
         action_type=ActionType.PROCESS,
         old_values=old_data,
-        new_values={"status": DocumentStatus.UPLOADED, "reprocessed": True}
+        new_values={"status": DocumentStatus.UPLOADED, "reprocessed": True},
     )
 
     return ReprocessResponse(
@@ -326,8 +324,6 @@ async def get_document_file(
     )
 
 
-from app.core.deps import require_admin
-
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     document_id: int,
@@ -367,5 +363,5 @@ async def delete_document(
         entity_type="DOCUMENT",
         entity_id=old_data["id"],
         action_type=ActionType.DELETE,
-        old_values=old_data
+        old_values=old_data,
     )

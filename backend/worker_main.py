@@ -10,15 +10,16 @@ async def main():
     logger.info("Initializing SmartDocs Background Worker...")
     try:
         # Check DB connection
-        async with engine.begin() as conn:
+        async with engine.begin():
             pass
         logger.info("Database connection established.")
-        
+
         # Start the graceful infinite loop
         await worker_service.start()
     except Exception as e:
         logger.error(f"Worker startup failed: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     try:
