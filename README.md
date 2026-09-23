@@ -10,10 +10,13 @@
 
   [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js)](https://nextjs.org/)
   [![React](https://img.shields.io/badge/React-19-blue?style=flat&logo=react)](https://react.dev/)
-  [![FastAPI](https://img.shields.io/badge/FastAPI-10.x-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
-  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
+  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL_17-pgvector-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
   [![LangChain](https://img.shields.io/badge/LangChain-LangGraph-yellow?style=flat)](https://www.langchain.com/)
   [![Azure](https://img.shields.io/badge/Microsoft_Azure-blue?style=flat&logo=microsoftazure)](https://azure.microsoft.com/)
+
+  [![Backend CI](https://github.com/TiagoAReiz/SmartDocs/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/TiagoAReiz/SmartDocs/actions/workflows/backend-ci.yml)
+  [![Frontend CI](https://github.com/TiagoAReiz/SmartDocs/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/TiagoAReiz/SmartDocs/actions/workflows/frontend-ci.yml)
   
 </div>
 
@@ -55,45 +58,74 @@ O **SmartDocs** é mais do que  um simples pipeline de RAG (Retrieval-Augmented 
 
 ### Pré-requisitos Fundamentais
 1. **Node.js** (v20+)
-2. **Python** (v3.10+) 
-3. **PostgreSQL 15+** com a extensão `pgvector` instalada.
-4. Contas na nuvem garantindo credenciais (*Azure Document Intelligence, Storage, LLM API Keys*).
+2. **Python** (3.12 — mesma versão usada no CI e no `Dockerfile`)
+3. **Docker** (para subir PostgreSQL 17 + `pgvector` e o Azurite localmente) — ou um PostgreSQL próprio com a extensão `pgvector`.
+4. Credenciais Azure (*Document Intelligence* e *Azure OpenAI*) para extração de documentos e chat. Sem elas a API sobe e autentica normalmente, mas upload/processamento e o agente não funcionam.
 
 ### Subindo os Serviços
 
-#### Passo 1. Subindo Backend e Banco de Dados
+#### Passo 1. Banco de Dados e Storage local
 ```bash
-# Navegue a pasta do backend
 cd backend
 
-# Crie e habilite seu ambiente virtual (Linux/macOS)
-python3 -m venv venv
-source venv/bin/activate
-# ou Windows: venv\Scripts\activate
+# PostgreSQL 17 + pgvector (porta 5432) e Azurite (emulador do Blob Storage, porta 10000)
+docker compose up -d db azurite
+```
 
-# Instale as dependências API e LangChain Python
+#### Passo 2. Backend (API + Worker)
+```bash
+# Ainda na pasta backend
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
 pip install -r requirements.txt
 
-# Edite suas variáveis de autenticação em um `.env`
+# Variáveis de ambiente (os defaults já apontam para o docker compose acima;
+# preencha AZURE_DI_* e AZURE_OPENAI_*)
 cp .env.example .env
 
-# Aplique o schema das tabelas no PostgreSQL e rode o Uvicorn
+# Aplica o schema (inclui a extensão pgvector)
 alembic upgrade head
+
+# Cria o primeiro usuário admin (o login exige um usuário existente)
+python -c "import asyncio; from app.database import async_session; from app.services.auth_service import create_user
+async def main():
+    async with async_session() as db:
+        await create_user('Admin', 'admin@smartdocs.local', 'admin123', 'admin', db); await db.commit()
+asyncio.run(main())"
+
+# API em http://localhost:8000 (Swagger em /docs)
 uvicorn app.main:app --reload
 ```
-*(Opcional / Desejado: Também dispare em outro terminal o job worker executando o script `python worker_main.py` para testes de documentos grandes.)*
-
-#### Passo 2. Subindo Frontend 
+Em outro terminal (mesmo venv), suba o worker que processa os documentos enviados de forma assíncrona:
 ```bash
-# Na pasta de frontend, instale suas dependências do Node
+python worker_main.py
+```
+
+> Alternativa: `docker compose up --build` na pasta `backend` sobe banco, Azurite, API (roda as migrations no start) e worker de uma vez.
+
+#### Passo 3. Frontend
+```bash
 cd frontend
 npm install
 
-# Inicie o App em modo de desenvolvedor (Server-Side rendering ativado)
+# Opcional: a URL da API já tem default http://localhost:8000
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+
 npm run dev
 ```
 
-Abra a porta [http://localhost:3000](http://localhost:3000) no seu navegador para conversar com a aplicação!
+Abra [http://localhost:3000](http://localhost:3000) e entre com `admin@smartdocs.local` / `admin123`.
+
+### Testes e Qualidade
+```bash
+# Backend (com o banco do Passo 1 migrado)
+cd backend && pip install ruff==0.16.8 && ruff check . && ruff format --check . && pytest tests/
+
+# Frontend
+cd frontend && npm run lint && npx tsc --noEmit && npm run build
+```
+Os mesmos passos rodam no GitHub Actions (`backend-ci.yml` e `frontend-ci.yml`) a cada push/PR na `main`.
 
 ---
 
