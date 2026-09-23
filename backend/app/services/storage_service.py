@@ -139,7 +139,7 @@ class StorageService:
             container_name, blob_name = self._parse_blob_url(blob_url)
             container_client = client.get_container_client(container_name)
             blob_client = container_client.get_blob_client(blob_name)
-            
+
             await blob_client.delete_blob()
             logger.info(f"Blob deletado com sucesso: {blob_url}")
         except Exception as e:

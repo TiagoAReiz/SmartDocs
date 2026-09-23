@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 
 // Helper component for JSON display
-const JsonDisplay = ({ data }: { data: Record<string, any> | null }) => {
+const JsonDisplay = ({ data }: { data: Record<string, unknown> | null }) => {
     if (!data) return <span className="text-muted-foreground">-</span>;
     return (
         <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto max-w-[300px] max-h-[150px] overflow-y-auto">

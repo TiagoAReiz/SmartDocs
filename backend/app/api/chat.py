@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, delete, desc
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -38,12 +38,14 @@ async def _get_or_create_thread(
             tid = UUID(thread_id)
             result = await db.execute(select(ChatThread).where(ChatThread.id == tid))
             thread = result.scalar_one_or_none()
-            
+
             if not thread:
                 raise HTTPException(status_code=404, detail="Thread not found")
             if thread.user_id != user_id:
-                raise HTTPException(status_code=403, detail="Not authorized to access this thread")
-            
+                raise HTTPException(
+                    status_code=403, detail="Not authorized to access this thread"
+                )
+
             # Update timestamp
             thread.updated_at = datetime.now(timezone.utc)
             return thread, False
@@ -69,7 +71,9 @@ async def send_chat(
     is_admin = current_user.role == "admin"
 
     # Handle thread creation/retrieval
-    thread, is_new = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
+    thread, is_new = await _get_or_create_thread(
+        db, current_user.id, body.thread_id, body.question
+    )
     thread_id_str = str(thread.id)
     thread_id_val = thread.id
     user_id_val = current_user.id
@@ -94,7 +98,7 @@ async def send_chat(
     )
     db.add(message)
     await db.commit()
-    
+
     if is_new:
         AuditService.log_action(
             background_tasks=background_tasks,
@@ -104,7 +108,7 @@ async def send_chat(
             entity_type="CHAT_THREAD",
             entity_id=thread_id_val,
             action_type=ActionType.CREATE,
-            new_values={"title": thread.title}
+            new_values={"title": thread.title},
         )
 
     return ChatResponse(
@@ -127,19 +131,21 @@ async def stream_chat(
     is_admin = current_user.role == "admin"
 
     # Handle thread creation/retrieval
-    thread, is_new = await _get_or_create_thread(db, current_user.id, body.thread_id, body.question)
+    thread, is_new = await _get_or_create_thread(
+        db, current_user.id, body.thread_id, body.question
+    )
     thread_id_str = str(thread.id)
     thread_id_val = thread.id
     user_id_val = current_user.id
-    
+
     # We need to commit the thread creation so the ID exists for parallel requests if any,
-    # though for this stream it matters that it exists in the transaction. 
+    # though for this stream it matters that it exists in the transaction.
     # Since we are using the same session, flush is enough, but to be safe for concurrent:
-    await db.commit() 
+    await db.commit()
     # Re-fetch thread to be attached to session again if needed, or just use ID.
     # Actually, committing closes the transaction. usage of `thread` object might fail if lazy loading.
     # But we only need `thread.id` for `ChatMessage`.
-    
+
     if is_new:
         AuditService.log_action(
             background_tasks=background_tasks,
@@ -149,7 +155,7 @@ async def stream_chat(
             entity_type="CHAT_THREAD",
             entity_id=thread_id_val,
             action_type=ActionType.CREATE,
-            new_values={"title": thread.title}
+            new_values={"title": thread.title},
         )
 
     async def event_generator():
@@ -160,7 +166,7 @@ async def stream_chat(
         sql_used = None
         row_count = 0
         data = []
-        
+
         async for chunk in chat_service.chat_stream(
             question=body.question,
             user_id=user_id_val,
@@ -192,13 +198,13 @@ async def stream_chat(
             # Since we committed before, we need to fetch it or update via ID
             await db.execute(
                 select(ChatThread).where(ChatThread.id == thread_id_val)
-            ) # Just to ensure it's in session? No, explicit update is better.
-            
+            )  # Just to ensure it's in session? No, explicit update is better.
+
             # Simple update query for timestamp
             # But let's just add the message and commit. The relationship might not update the parent timestamp automatically without explicit logic.
             # Let's leave timestamp update for now or do explicit update.
             # thread.updated_at = datetime.utcnow() # we don't have the object attached confidently.
-            
+
             await db.commit()
 
         yield "data: [DONE]\n\n"
@@ -224,24 +230,24 @@ async def list_threads(
 ):
     """List all chat threads for the user."""
     print(f"DEBUG: Listing threads for user {current_user.id} with search='{search}'")
-    
+
     query = select(ChatThread).where(ChatThread.user_id == current_user.id)
-    
+
     if search:
         query = query.where(ChatThread.title.ilike(f"%{search}%"))
-        
+
     query = query.order_by(desc(ChatThread.updated_at)).offset(offset).limit(limit)
-    
+
     result = await db.execute(query)
     threads = result.scalars().all()
-    
+
     # Fix timezone: allow naive datetimes (stored as UTC) to be serialized with Z suffix
     for t in threads:
         if t.created_at and t.created_at.tzinfo is None:
             t.created_at = t.created_at.replace(tzinfo=timezone.utc)
         if t.updated_at and t.updated_at.tzinfo is None:
             t.updated_at = t.updated_at.replace(tzinfo=timezone.utc)
-            
+
     print(f"DEBUG: Found {len(threads)} threads")
     return threads
 
@@ -260,7 +266,9 @@ async def get_thread_messages(
 
     # Verify ownership
     result = await db.execute(
-        select(ChatThread).where(ChatThread.id == tid, ChatThread.user_id == current_user.id)
+        select(ChatThread).where(
+            ChatThread.id == tid, ChatThread.user_id == current_user.id
+        )
     )
     thread = result.scalar_one_or_none()
     if not thread:
@@ -273,7 +281,7 @@ async def get_thread_messages(
         .order_by(ChatMessage.created_at.asc())
     )
     messages = result.scalars().all()
-    
+
     return ChatHistoryResponse(
         messages=[ChatHistoryItem.model_validate(m) for m in messages]
     )
@@ -294,7 +302,9 @@ async def delete_thread(
 
     # Verify ownership
     result = await db.execute(
-        select(ChatThread).where(ChatThread.id == tid, ChatThread.user_id == current_user.id)
+        select(ChatThread).where(
+            ChatThread.id == tid, ChatThread.user_id == current_user.id
+        )
     )
     thread = result.scalar_one_or_none()
     if not thread:
@@ -304,7 +314,7 @@ async def delete_thread(
 
     await db.delete(thread)
     await db.commit()
-    
+
     AuditService.log_action(
         background_tasks=background_tasks,
         get_db_session_factory=async_session,
@@ -313,5 +323,5 @@ async def delete_thread(
         entity_type="CHAT_THREAD",
         entity_id=tid,
         action_type=ActionType.DELETE,
-        old_values=old_data
+        old_values=old_data,
     )

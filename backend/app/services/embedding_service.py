@@ -51,8 +51,7 @@ async def generate_embeddings(texts: list[str]) -> list[list[float]]:
         for i in range(0, len(texts), _BATCH_SIZE):
             batch = texts[i : i + _BATCH_SIZE]
             logger.debug(
-                f"Gerando embeddings batch {i // _BATCH_SIZE + 1} "
-                f"({len(batch)} textos)"
+                f"Gerando embeddings batch {i // _BATCH_SIZE + 1} ({len(batch)} textos)"
             )
 
             response = await client.embeddings.create(

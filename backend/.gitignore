@@ -28,3 +28,13 @@ alembic/versions/*.pyc
 
 # Docker
 .docker/
+
+# Virtualenvs / tool caches
+venv/
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# Local logs
+*.log
+worker_logs.txt

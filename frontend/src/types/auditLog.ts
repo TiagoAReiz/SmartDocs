@@ -7,8 +7,8 @@ export interface AuditLog {
   entity_type: string;
   entity_id: string;
   action_type: ActionType;
-  old_values: Record<string, any> | null;
-  new_values: Record<string, any> | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
   ip_address: string | null;
   created_at: string;
 }

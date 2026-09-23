@@ -1,6 +1,5 @@
 import enum
 from datetime import datetime
-from typing import Optional, Dict, Any
 
 from sqlalchemy import (
     String,
@@ -8,7 +7,6 @@ from sqlalchemy import (
     Integer,
     ForeignKey,
     DateTime,
-    JSON,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
@@ -35,7 +33,7 @@ class DocumentProcessingJob(Base):
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_log: Mapped[str | None] = mapped_column(Text)
-    
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -47,8 +45,7 @@ class DocumentProcessingJob(Base):
 
     # Relationships
     document = relationship(
-        "Document",
-        backref=backref("processing_jobs", cascade="all, delete-orphan")
+        "Document", backref=backref("processing_jobs", cascade="all, delete-orphan")
     )
 
     def __repr__(self) -> str:

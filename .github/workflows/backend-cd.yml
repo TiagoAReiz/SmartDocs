@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths: ['backend/**']
+  workflow_dispatch:
 
 env:
   ACR_NAME: smartdocsacr          # Azure Container Registry
@@ -12,7 +13,27 @@ env:
   CONTAINER_APP: smartdocs-api    # Azure Container App name
 
 jobs:
+  # Skip the deploy (instead of failing) when the Azure service principal
+  # secret is not configured in this repository.
+  check-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has-azure-creds: ${{ steps.check.outputs.has-azure-creds }}
+    steps:
+      - id: check
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -n "$AZURE_CREDENTIALS" ]; then
+            echo "has-azure-creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-azure-creds=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AZURE_CREDENTIALS secret not set - skipping backend deploy."
+          fi
+
   deploy:
+    needs: check-secrets
+    if: needs.check-secrets.outputs.has-azure-creds == 'true'
     runs-on: ubuntu-latest
 
     steps:
